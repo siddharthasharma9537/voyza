@@ -52,6 +52,22 @@ services:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
+  # ── Next.js Frontend ────────────────────────────────────────────────────────
+  web:
+    build:
+      context: ./frontend-web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend-web:/app    # hot-reload in dev
+      - /app/node_modules      # preserve node_modules
+    depends_on:
+      - api
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000/api/v1
+
 volumes:
   postgres_data:
   redis_data:
