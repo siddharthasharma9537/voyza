@@ -1,0 +1,474 @@
+{
+  "info": {
+    "name": "Voyza API — Complete",
+    "description": "Full Voyza car rental platform API. 52 endpoints across 8 modules.\n\nSetup:\n1. Set {{base_url}} = http://localhost:8000/api/v1\n2. Run 'Auth / Send OTP' then 'Auth / Verify OTP'\n3. Access token auto-saved to {{access_token}}\n4. All authenticated requests use Bearer {{access_token}} automatically",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "base_url",      "value": "http://localhost:8000/api/v1", "type": "string"},
+    {"key": "access_token",  "value": "", "type": "string"},
+    {"key": "refresh_token", "value": "", "type": "string"},
+    {"key": "booking_id",    "value": "", "type": "string"},
+    {"key": "car_id",        "value": "", "type": "string"},
+    {"key": "payment_id",    "value": "", "type": "string"}
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]
+  },
+  "item": [
+    {
+      "name": "🔐 Auth",
+      "item": [
+        {
+          "name": "Send OTP",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/send-otp",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"phone\": \"+919834567890\"}"}
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('OTP sent', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "if (r.otp) pm.collectionVariables.set('otp', r.otp);"
+          ]}}]
+        },
+        {
+          "name": "Verify OTP → Login",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/verify-otp",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"phone\": \"+919834567890\", \"otp\": \"{{otp}}\", \"purpose\": \"login\"}"}
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Login success', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "pm.collectionVariables.set('access_token', r.access_token);",
+            "pm.collectionVariables.set('refresh_token', r.refresh_token);",
+            "console.log('Token saved:', r.access_token.substring(0,20) + '...');"
+          ]}}]
+        },
+        {
+          "name": "Register (Customer)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/register",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"full_name\": \"Test User\",\n  \"phone\": \"+919999999999\",\n  \"email\": \"test@example.com\",\n  \"password\": \"Test@1234\",\n  \"role\": \"customer\"\n}"}
+          }
+        },
+        {
+          "name": "Login (Password)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/login",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"phone\": \"+919834567890\", \"password\": \"Customer@1234\"}"}
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "const r = pm.response.json();",
+            "if (r.access_token) { pm.collectionVariables.set('access_token', r.access_token); pm.collectionVariables.set('refresh_token', r.refresh_token); }"
+          ]}}]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/refresh",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"refresh_token\": \"{{refresh_token}}\"}"}
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "const r = pm.response.json();",
+            "if (r.access_token) pm.collectionVariables.set('access_token', r.access_token);"
+          ]}}]
+        },
+        {
+          "name": "Get My Profile",
+          "request": {"method": "GET", "url": "{{base_url}}/auth/me"}
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/logout",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"refresh_token\": \"{{refresh_token}}\"}"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "🚗 Cars",
+      "item": [
+        {
+          "name": "Browse Cars",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/cars?city=Hyderabad&fuel_type=petrol&page=1&limit=10&sort_by=price_asc",
+              "query": [
+                {"key": "city",        "value": "Hyderabad"},
+                {"key": "fuel_type",   "value": "petrol"},
+                {"key": "transmission","value": "", "disabled": true},
+                {"key": "min_seating", "value": "", "disabled": true},
+                {"key": "max_price_day","value": "", "disabled": true},
+                {"key": "pickup_time", "value": "", "disabled": true},
+                {"key": "dropoff_time","value": "", "disabled": true},
+                {"key": "sort_by",     "value": "price_asc"},
+                {"key": "page",        "value": "1"},
+                {"key": "limit",       "value": "10"}
+              ]
+            }
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "pm.test('Returns cars', () => pm.response.to.have.status(200));",
+            "const r = pm.response.json();",
+            "if (r.items && r.items.length > 0) pm.collectionVariables.set('car_id', r.items[0].id);"
+          ]}}]
+        },
+        {
+          "name": "Browse with Availability Filter",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/cars?city=Hyderabad&pickup_time=2026-05-10T10:00:00&dropoff_time=2026-05-12T10:00:00",
+              "query": [
+                {"key": "city",         "value": "Hyderabad"},
+                {"key": "pickup_time",  "value": "2026-05-10T10:00:00"},
+                {"key": "dropoff_time", "value": "2026-05-12T10:00:00"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Car Detail",
+          "request": {"method": "GET", "url": "{{base_url}}/cars/{{car_id}}"}
+        },
+        {
+          "name": "Car Reviews",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{base_url}}/cars/{{car_id}}/reviews?limit=10", "query": [{"key": "limit", "value": "10"}]}
+          }
+        },
+        {
+          "name": "Car Availability Calendar",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/cars/{{car_id}}/availability?from_date=2026-05-01&to_date=2026-05-31",
+              "query": [{"key": "from_date", "value": "2026-05-01"}, {"key": "to_date", "value": "2026-05-31"}]
+            }
+          }
+        },
+        {
+          "name": "Car Rating Stats",
+          "request": {"method": "GET", "url": "{{base_url}}/cars/{{car_id}}/rating"}
+        }
+      ]
+    },
+    {
+      "name": "📋 Bookings",
+      "item": [
+        {
+          "name": "Price Preview",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/bookings/preview",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"car_id\": \"{{car_id}}\",\n  \"pickup_time\": \"2026-05-15T10:00:00+05:30\",\n  \"dropoff_time\": \"2026-05-17T10:00:00+05:30\",\n  \"promo_code\": \"WELCOME10\"\n}"}
+          }
+        },
+        {
+          "name": "Create Booking",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/bookings",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"car_id\": \"{{car_id}}\",\n  \"pickup_time\": \"2026-05-20T10:00:00+05:30\",\n  \"dropoff_time\": \"2026-05-22T10:00:00+05:30\",\n  \"pickup_address\": \"Hyderabad Airport Terminal 1\",\n  \"promo_code\": \"WELCOME10\"\n}"}
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "const r = pm.response.json();",
+            "if (r.id) pm.collectionVariables.set('booking_id', r.id);"
+          ]}}]
+        },
+        {
+          "name": "My Bookings",
+          "request": {"method": "GET", "url": "{{base_url}}/bookings"}
+        },
+        {
+          "name": "Booking Detail",
+          "request": {"method": "GET", "url": "{{base_url}}/bookings/{{booking_id}}"}
+        },
+        {
+          "name": "Cancel Booking",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/bookings/{{booking_id}}/cancel",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"reason\": \"Change of plans — need to cancel the trip\"}"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "💳 Payments",
+      "item": [
+        {
+          "name": "Create Razorpay Order",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/payments/create-order",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"booking_id\": \"{{booking_id}}\"}"}
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "const r = pm.response.json();",
+            "if (r.razorpay_order_id) pm.collectionVariables.set('rzp_order_id', r.razorpay_order_id);"
+          ]}}]
+        },
+        {
+          "name": "Verify Payment",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/payments/verify",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"booking_id\": \"{{booking_id}}\",\n  \"razorpay_order_id\": \"{{rzp_order_id}}\",\n  \"razorpay_payment_id\": \"pay_TestABC123\",\n  \"razorpay_signature\": \"computed_hmac_sha256_signature\"\n}"}
+          }
+        },
+        {
+          "name": "Webhook (Razorpay → Server)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/payments/webhook",
+            "header": [
+              {"key": "Content-Type",            "value": "application/json"},
+              {"key": "X-Razorpay-Signature",    "value": "computed_hmac_sha256_of_body"}
+            ],
+            "body": {"mode": "raw", "raw": "{\n  \"event\": \"payment.captured\",\n  \"payload\": {\n    \"payment\": {\n      \"entity\": {\n        \"id\": \"pay_TestABC123\",\n        \"order_id\": \"{{rzp_order_id}}\",\n        \"amount\": 388800,\n        \"status\": \"captured\"\n      }\n    }\n  }\n}"}
+          }
+        },
+        {
+          "name": "Payment Status",
+          "request": {"method": "GET", "url": "{{base_url}}/payments/{{booking_id}}"}
+        },
+        {
+          "name": "Request Refund",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/payments/refund",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"booking_id\": \"{{booking_id}}\", \"reason\": \"Cancellation — 48h before pickup\"}"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "🚗 Owner",
+      "item": [
+        {
+          "name": "My Cars",
+          "request": {"method": "GET", "url": "{{base_url}}/owner/cars"}
+        },
+        {
+          "name": "Create Car Listing",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/owner/cars",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"make\": \"Maruti\",\n  \"model\": \"Baleno\",\n  \"variant\": \"Alpha CVT\",\n  \"year\": 2024,\n  \"color\": \"Arctic White\",\n  \"seating\": 5,\n  \"fuel_type\": \"petrol\",\n  \"transmission\": \"automatic\",\n  \"mileage_kmpl\": 22.94,\n  \"city\": \"Hyderabad\",\n  \"state\": \"Telangana\",\n  \"address\": \"Kondapur, Hyderabad\",\n  \"latitude\": 17.4575,\n  \"longitude\": 78.3610,\n  \"price_per_hour\": 22000,\n  \"price_per_day\": 90000,\n  \"security_deposit\": 200000,\n  \"registration_number\": \"TS15MN3456\",\n  \"features\": {\"ac\": true, \"gps\": false, \"sunroof\": false, \"bluetooth\": true, \"child_seat\": false}\n}"}
+          },
+          "event": [{"listen": "test", "script": {"exec": [
+            "const r = pm.response.json();",
+            "if (r.id) pm.collectionVariables.set('new_car_id', r.id);"
+          ]}}]
+        },
+        {
+          "name": "Update Car",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/owner/cars/{{new_car_id}}",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"price_per_day\": 95000, \"price_per_hour\": 25000}"}
+          }
+        },
+        {
+          "name": "Submit Car for Review",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/owner/cars/{{new_car_id}}/submit"
+          }
+        },
+        {
+          "name": "Block Availability Slot",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/owner/availability",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"car_id\": \"{{car_id}}\",\n  \"start_time\": \"2026-06-01T00:00:00+05:30\",\n  \"end_time\": \"2026-06-05T00:00:00+05:30\",\n  \"reason\": \"maintenance\"\n}"}
+          }
+        },
+        {
+          "name": "My Bookings (Owner)",
+          "request": {"method": "GET", "url": "{{base_url}}/owner/bookings"}
+        },
+        {
+          "name": "Accept Booking",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/owner/bookings/{{booking_id}}/accept"
+          }
+        },
+        {
+          "name": "Earnings Summary",
+          "request": {"method": "GET", "url": "{{base_url}}/owner/earnings"}
+        },
+        {
+          "name": "Monthly Earnings",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{base_url}}/owner/earnings/monthly?months=6", "query": [{"key": "months", "value": "6"}]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "⭐ Reviews",
+      "item": [
+        {
+          "name": "Submit Review",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/reviews",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"booking_id\": \"{{booking_id}}\",\n  \"rating\": 5,\n  \"comment\": \"Excellent car! Very clean and well maintained. Will book again.\"\n}"}
+          }
+        },
+        {
+          "name": "Pending Reviews (My)",
+          "request": {"method": "GET", "url": "{{base_url}}/reviews/pending"}
+        },
+        {
+          "name": "Owner Reply to Review",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/reviews/reply",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"review_id\": \"{{review_id}}\",\n  \"reply\": \"Thank you for the kind words! We're glad you enjoyed the trip. Hope to see you again!\"\n}"}
+          }
+        }
+      ]
+    },
+    {
+      "name": "⚙️ Admin",
+      "item": [
+        {
+          "name": "KYC Queue",
+          "request": {"method": "GET", "url": "{{base_url}}/admin/kyc"}
+        },
+        {
+          "name": "Approve KYC",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/admin/kyc/review",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"car_id\": \"{{car_id}}\",\n  \"decision\": \"approved\",\n  \"notes\": \"All documents verified. RC and insurance valid.\"\n}"}
+          }
+        },
+        {
+          "name": "Reject KYC",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/admin/kyc/review",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"car_id\": \"{{car_id}}\",\n  \"decision\": \"rejected\",\n  \"notes\": \"RC document is blurry. Please resubmit a clear photo.\"\n}"}
+          }
+        },
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/admin/users?role=customer&page=1&limit=20",
+              "query": [
+                {"key": "role",   "value": "customer"},
+                {"key": "search", "value": "", "disabled": true},
+                {"key": "page",   "value": "1"},
+                {"key": "limit",  "value": "20"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Suspend User",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/admin/users/{{user_id}}/toggle-status",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\"is_active\": false, \"reason\": \"Suspected fraud activity\"}"}
+          }
+        },
+        {
+          "name": "All Bookings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/admin/bookings?status=confirmed&page=1",
+              "query": [{"key": "status", "value": "confirmed"}, {"key": "page", "value": "1"}]
+            }
+          }
+        },
+        {
+          "name": "Flag Dispute",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/admin/bookings/{{booking_id}}/dispute"
+          }
+        },
+        {
+          "name": "Disputed Bookings",
+          "request": {"method": "GET", "url": "{{base_url}}/admin/disputes"}
+        },
+        {
+          "name": "Resolve Dispute",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/admin/disputes/resolve",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"booking_id\": \"{{booking_id}}\",\n  \"resolution\": \"Investigated the dispute. Customer claim is valid — car was returned before dropoff_time but not logged. Issuing 50% refund.\",\n  \"refund_amount\": 75000\n}"}
+          }
+        },
+        {
+          "name": "Platform Analytics",
+          "request": {"method": "GET", "url": "{{base_url}}/admin/analytics"}
+        },
+        {
+          "name": "Monthly Metrics",
+          "request": {
+            "method": "GET",
+            "url": {"raw": "{{base_url}}/admin/analytics/monthly?months=6", "query": [{"key": "months", "value": "6"}]}
+          }
+        }
+      ]
+    },
+    {
+      "name": "📡 WebSocket",
+      "description": "WebSocket endpoints — test with wscat or Postman's WebSocket tab.\n\nInstall wscat: npm install -g wscat\n\n# Connect as customer to track booking:\nwscat -c 'ws://localhost:8000/ws/track/{booking_id}?token={access_token}'\n\n# Connect to notifications:\nwscat -c 'ws://localhost:8000/ws/notify/{user_id}?token={access_token}'\n\n# Connect to admin feed:\nwscat -c 'ws://localhost:8000/ws/admin/feed?token={admin_token}'",
+      "item": [
+        {
+          "name": "Push GPS Update (REST fallback)",
+          "request": {
+            "method": "POST",
+            "url": {"raw": "{{base_url}}/track/update?token={{access_token}}", "query": [{"key": "token", "value": "{{access_token}}"}]},
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"booking_id\": \"{{booking_id}}\",\n  \"lat\": 17.385044,\n  \"lng\": 78.486671,\n  \"speed_kmph\": 45.5,\n  \"heading\": 270\n}"}
+          }
+        }
+      ]
+    }
+  ]
+}
