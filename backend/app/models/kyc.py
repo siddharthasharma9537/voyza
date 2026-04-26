@@ -16,7 +16,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -127,7 +127,7 @@ class DamageReport(Base):
     )
 
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    damage_photos: Mapped[list[str]] = mapped_column(default=list)  # JSON array of S3 URLs
+    damage_photos: Mapped[list[str]] = mapped_column(JSON, default=list)  # JSON array of S3 URLs
     estimated_cost: Mapped[int] = mapped_column(nullable=True)  # in paise
 
     status: Mapped[DamageReportStatus] = mapped_column(
