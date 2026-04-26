@@ -7,8 +7,12 @@ All middleware, exception handlers, and routers registered here.
 
 import time
 import uuid
+from contextlib import contextmanager
 
 import structlog
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.operations import Operations
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -16,6 +20,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
+from sqlalchemy import create_engine, text
 
 from app.api.v1.endpoints import admin, auth, bookings, drivers, owner, payments, realtime, reviews, rides, vehicles
 from app.core.config import settings
@@ -38,6 +43,28 @@ limiter = Limiter(
     key_func=get_remote_address,
     default_limits=[f"{settings.RATE_LIMIT_PER_MINUTE}/minute"],
 )
+
+
+# ── Database migrations ───────────────────────────────────────────────────────
+def run_migrations():
+    """Run Alembic migrations on startup."""
+    try:
+        import subprocess
+        import os
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            cwd="/app" if os.path.exists("/app") else os.getcwd(),
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        if result.returncode != 0:
+            logger.warning("Database migration returned non-zero code", stderr=result.stderr)
+        else:
+            logger.info("Database migrations completed successfully")
+    except Exception as e:
+        logger.warning("Could not run database migrations", exc_info=e)
+        # Don't fail startup if migrations fail, just log the warning
 
 
 # ── App factory ───────────────────────────────────────────────────────────────
@@ -114,6 +141,11 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["Health"], include_in_schema=False)
     async def health():
         return {"status": "ok", "version": settings.APP_VERSION}
+
+    # ── Startup event: Run database migrations ────────────────────────────────
+    @app.on_event("startup")
+    async def startup_event():
+        run_migrations()
 
     return app
 
