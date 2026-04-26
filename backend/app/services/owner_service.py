@@ -390,3 +390,81 @@ async def get_monthly_earnings(owner_id: str, db: AsyncSession, months: int = 6)
         )
         for row in rows
     ]
+
+
+# ── Get booking detail (owner view) ────────────────────────────────────────────
+
+async def get_owner_booking_detail(booking_id: str, owner_id: str, db: AsyncSession) -> dict:
+    """
+    Returns a complete booking detail from the owner's perspective.
+    Only accessible by the owner of the vehicle or an admin.
+    """
+    result = await db.execute(
+        select(Booking, Vehicle, User, VehicleImage)
+        .join(Vehicle, Vehicle.id == Booking.vehicle_id)
+        .join(User, User.id == Booking.customer_id)
+        .outerjoin(VehicleImage, and_(VehicleImage.vehicle_id == Vehicle.id, VehicleImage.is_primary.is_(True)))
+        .where(Booking.id == booking_id, Booking.owner_id == owner_id)
+    )
+    row = result.one_or_none()
+
+    if not row:
+        raise HTTPException(404, "Booking not found or you don't have access")
+
+    booking, vehicle, customer, primary_image = row
+
+    # Calculate duration
+    duration_seconds = (booking.dropoff_time - booking.pickup_time).total_seconds()
+    duration_hours = duration_seconds / 3600
+    duration_days = math.ceil(duration_hours / 24)
+
+    # Calculate owner earnings
+    owner_earnings = int(booking.base_amount * (1 - PLATFORM_FEE_RATE))
+
+    return {
+        "id": booking.id,
+        "booking_reference": f"VOY-{booking.created_at.strftime('%Y%m%d')}-{booking.id[:8].upper()}",
+        "status": booking.status.value,
+        "created_at": booking.created_at.isoformat(),
+        "pickup_time": booking.pickup_time.isoformat(),
+        "dropoff_time": booking.dropoff_time.isoformat(),
+        "duration_hours": round(duration_hours, 2),
+        "duration_days": duration_days,
+        "pickup_address": booking.pickup_address,
+        "pickup_latitude": float(booking.pickup_latitude) if booking.pickup_latitude else None,
+        "pickup_longitude": float(booking.pickup_longitude) if booking.pickup_longitude else None,
+        "dropoff_address": booking.dropoff_address,
+        "base_amount": booking.base_amount,
+        "discount_amount": booking.discount_amount,
+        "tax_amount": booking.tax_amount,
+        "security_deposit": booking.security_deposit,
+        "total_amount": booking.total_amount,
+        "owner_earnings": owner_earnings,
+        "vehicle": {
+            "id": vehicle.id,
+            "make": vehicle.make,
+            "model": vehicle.model,
+            "variant": vehicle.variant,
+            "year": vehicle.year,
+            "color": vehicle.color,
+            "registration_number": vehicle.registration_number,
+            "fuel_type": vehicle.fuel_type.value if hasattr(vehicle.fuel_type, "value") else str(vehicle.fuel_type),
+            "transmission": vehicle.transmission.value if hasattr(vehicle.transmission, "value") else str(vehicle.transmission),
+            "seating": vehicle.seating,
+            "mileage_kmpl": float(vehicle.mileage_kmpl) if vehicle.mileage_kmpl else None,
+            "image_url": primary_image.url if primary_image else None,
+        },
+        "customer": {
+            "id": customer.id,
+            "full_name": customer.full_name,
+            "phone": customer.phone,
+            "email": customer.email,
+            "avatar_url": customer.avatar_url,
+            "is_verified": customer.is_verified,
+        },
+        "cancelled_at": booking.cancelled_at.isoformat() if booking.cancelled_at else None,
+        "cancel_reason": booking.cancel_reason,
+        "cancelled_by": booking.cancelled_by,
+        "odometer_start": booking.odometer_start,
+        "odometer_end": booking.odometer_end,
+    }

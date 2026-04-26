@@ -10,22 +10,46 @@ import re
 
 
 class PhoneSendOTPRequest(BaseModel):
-    phone: str = Field(..., examples=["+919876543210"])
+    phone: str = Field(..., examples=["9876543210"])
 
     @field_validator("phone")
     @classmethod
     def validate_phone(cls, v: str) -> str:
-        # E.164 format: +[country][number], 7-15 digits
-        pattern = r"^\+[1-9]\d{6,14}$"
+        # Accept 10-digit Indian phone numbers
+        v = v.strip()
+        # Remove country code if present
+        if v.startswith("+91"):
+            v = v[3:]
+        elif v.startswith("91"):
+            v = v[2:]
+        # Validate 10-digit Indian number
+        pattern = r"^[6-9]\d{9}$"
         if not re.match(pattern, v):
-            raise ValueError("Phone must be in E.164 format, e.g. +919876543210")
-        return v
+            raise ValueError("Phone must be a valid 10-digit Indian number, e.g. 9876543210")
+        # Convert to E.164 format for storage
+        return f"+91{v}"
 
 
 class PhoneVerifyOTPRequest(BaseModel):
     phone: str
     otp:   str = Field(..., min_length=6, max_length=6)
     purpose: str = Field(default="login", pattern="^(login|verify)$")
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        # Accept 10-digit Indian phone numbers
+        v = v.strip()
+        # Remove country code if present
+        if v.startswith("+91"):
+            v = v[3:]
+        elif v.startswith("91"):
+            v = v[2:]
+        # Validate 10-digit Indian number
+        if not re.match(r"^[6-9]\d{9}$", v):
+            raise ValueError("Phone must be a valid 10-digit Indian number, e.g. 9876543210")
+        # Convert to E.164 format for storage
+        return f"+91{v}"
 
 
 class RegisterRequest(BaseModel):
@@ -38,14 +62,39 @@ class RegisterRequest(BaseModel):
     @field_validator("phone")
     @classmethod
     def validate_phone(cls, v: str) -> str:
-        if not re.match(r"^\+[1-9]\d{6,14}$", v):
-            raise ValueError("Invalid phone format")
-        return v
+        # Accept 10-digit Indian phone numbers
+        v = v.strip()
+        # Remove country code if present
+        if v.startswith("+91"):
+            v = v[3:]
+        elif v.startswith("91"):
+            v = v[2:]
+        # Validate 10-digit Indian number
+        if not re.match(r"^[6-9]\d{9}$", v):
+            raise ValueError("Phone must be a valid 10-digit Indian number, e.g. 9876543210")
+        # Convert to E.164 format for storage
+        return f"+91{v}"
 
 
 class LoginRequest(BaseModel):
     phone:    str
     password: str
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        # Accept 10-digit Indian phone numbers
+        v = v.strip()
+        # Remove country code if present
+        if v.startswith("+91"):
+            v = v[3:]
+        elif v.startswith("91"):
+            v = v[2:]
+        # Validate 10-digit Indian number
+        if not re.match(r"^[6-9]\d{9}$", v):
+            raise ValueError("Phone must be a valid 10-digit Indian number, e.g. 9876543210")
+        # Convert to E.164 format for storage
+        return f"+91{v}"
 
 
 class TokenResponse(BaseModel):

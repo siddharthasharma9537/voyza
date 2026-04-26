@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
+import VaadinDateTimePicker from "@/components/VaadinDateTimePicker";
 
 const CITIES = ["Hyderabad", "Bangalore", "Mumbai", "Delhi", "Chennai", "Pune"];
 
@@ -12,6 +13,27 @@ export default function HomePage() {
   const [city, setCity] = useState("");
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
+
+  // Auto-correct drop-off if it becomes invalid
+  useEffect(() => {
+    if (pickup) {
+      const pickupDate = new Date(pickup);
+      if (dropoff) {
+        const dropoffDate = new Date(dropoff);
+        if (dropoffDate <= pickupDate) {
+          // Auto-set drop-off to next day
+          const correctedDropoff = new Date(pickupDate);
+          correctedDropoff.setDate(correctedDropoff.getDate() + 1);
+          setDropoff(correctedDropoff.toISOString());
+        }
+      } else {
+        // Auto-populate drop-off if empty
+        const dropoffDate = new Date(pickupDate);
+        dropoffDate.setDate(dropoffDate.getDate() + 1);
+        setDropoff(dropoffDate.toISOString());
+      }
+    }
+  }, [pickup]);
 
   function search() {
     const params = new URLSearchParams();
@@ -36,48 +58,53 @@ export default function HomePage() {
           </p>
 
           {/* Search bar */}
-          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 max-w-3xl mx-auto text-left">
-            <div className="grid sm:grid-cols-3 gap-3">
+          <div className="bg-gradient-to-br from-white via-blue-50 to-indigo-50 rounded-3xl shadow-2xl p-6 sm:p-10 max-w-4xl mx-auto text-left border-2 border-sky-300">
+            <h2 className="text-2xl font-bold text-sky-900 mb-2">🚗 Book your ride</h2>
+            <p className="text-slate-600 text-sm mb-6">Find the perfect car for your journey</p>
+
+            <div className="grid sm:grid-cols-4 gap-4 mb-6">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">City</label>
+                <label className="block text-xs font-bold text-sky-700 mb-2 uppercase tracking-wide">📍 City</label>
                 <select
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  className="w-full border-2 border-sky-300 rounded-xl px-3 py-3 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-sky-600 font-semibold bg-white hover:border-sky-400"
                 >
-                  <option value="">Any city</option>
+                  <option value="">Select city</option>
                   {CITIES.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Pick-up</label>
-                <input
-                  type="datetime-local"
-                  value={pickup}
-                  onChange={(e) => setPickup(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
+              <div className="sm:col-span-1.5">
+                <VaadinDateTimePicker label="📅 Pick-up" value={pickup} onChange={setPickup} />
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Drop-off</label>
-                <input
-                  type="datetime-local"
+              <div className="sm:col-span-1.5">
+                <VaadinDateTimePicker
+                  label="📅 Drop-off"
                   value={dropoff}
-                  onChange={(e) => setDropoff(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  onChange={setDropoff}
+                  showTomorrow
+                  minDateTime={pickup}
                 />
               </div>
             </div>
 
+            {/* Helper text */}
+            {city && pickup && dropoff && (
+              <div className="flex items-center gap-3 text-base font-semibold text-white mb-6 bg-gradient-to-r from-emerald-500 to-green-500 p-4 rounded-xl border-2 border-emerald-400 shadow-md">
+                <span className="text-2xl">✅</span>
+                <span>Ready to search for {CITIES.includes(city) ? city : 'any'} cars</span>
+              </div>
+            )}
+
             <button
               onClick={search}
-              className="mt-4 w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold py-3 rounded-xl transition-colors"
+              disabled={!city || !pickup || !dropoff}
+              className="w-full bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 disabled:from-slate-400 disabled:to-slate-400 text-white font-bold py-4 rounded-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-lg shadow-lg border-2 border-sky-400"
             >
-              Search Cars
+              {city && pickup && dropoff ? "🔍 Search available cars" : "⬆️ Select all fields above"}
             </button>
           </div>
         </div>

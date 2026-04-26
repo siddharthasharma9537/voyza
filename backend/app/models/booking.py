@@ -10,6 +10,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
+if __name__ != "__main__":
+    # Avoid circular imports — these are used only for type hints
+    pass
+
 
 class BookingStatus(str, enum.Enum):
     PENDING = "pending"
@@ -58,6 +62,9 @@ class Booking(Base):
     customer: "User" = relationship("User", back_populates="bookings", foreign_keys=[customer_id])
     vehicle: "Vehicle" = relationship("Vehicle", back_populates="bookings")
     payments: list["Payment"] = relationship("Payment", back_populates="booking", cascade="all, delete-orphan")
+    refunds: list["Refund"] = relationship("Refund", back_populates="booking", cascade="all, delete-orphan")
+    checklist_items: list["ChecklistItem"] = relationship("ChecklistItem", back_populates="booking", cascade="all, delete-orphan")
+    damage_reports: list["DamageReport"] = relationship("DamageReport", back_populates="booking", cascade="all, delete-orphan")
     review: "Review | None" = relationship("Review", back_populates="booking", uselist=False)
 
     __table_args__ = (
