@@ -7,9 +7,8 @@ All secrets must be injected via environment — never hard-coded.
 
 from functools import lru_cache
 from typing import Literal
-from urllib.parse import urlparse
 
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,46 +37,27 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: list[AnyHttpUrl] = []
 
     # ── Database ─────────────────────────────────────────────────────────────
-    DATABASE_URL: str = ""  # For Railway, which provides this directly
+    DATABASE_URL: str = ""  # For Railway (takes precedence)
     POSTGRES_SERVER: str = ""
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = ""
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = ""
 
-    @field_validator("POSTGRES_SERVER", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", mode="before")
-    @classmethod
-    def parse_database_url_if_needed(cls, v, info):
-        """If DATABASE_URL is provided, parse it to extract individual components."""
-        if info.data.get("DATABASE_URL"):
-            db_url = info.data.get("DATABASE_URL")
-            try:
-                parsed = urlparse(db_url)
-                # Extract components from DATABASE_URL
-                if info.field_name == "POSTGRES_SERVER":
-                    return parsed.hostname or "localhost"
-                elif info.field_name == "POSTGRES_PORT":
-                    return parsed.port or 5432
-                elif info.field_name == "POSTGRES_USER":
-                    return parsed.username or ""
-                elif info.field_name == "POSTGRES_PASSWORD":
-                    return parsed.password or ""
-                elif info.field_name == "POSTGRES_DB":
-                    # Remove leading slash from path
-                    return (parsed.path or "/").lstrip("/")
-            except Exception:
-                pass
-        return v
-
     @property
     def async_database_url(self) -> str:
-        # If DATABASE_URL is provided, convert it to async version
+        # If DATABASE_URL is provided, use it (Railway provides this)
         if self.DATABASE_URL:
             db_url = self.DATABASE_URL
-            # Replace the driver if it's postgresql (sync)
-            if "postgresql://" in db_url and "postgresql+asyncpg://" not in db_url:
+            # Ensure it uses asyncpg driver
+            if "postgresql://" in db_url:
                 return db_url.replace("postgresql://", "postgresql+asyncpg://")
+            elif "postgresql+psycopg2://" in db_url:
+                return db_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
             return db_url
+        # Fall back to individual connection parameters
+        if not all([self.POSTGRES_USER, self.POSTGRES_PASSWORD, self.POSTGRES_SERVER, self.POSTGRES_DB]):
+            raise ValueError("Either DATABASE_URL or all POSTGRES_* variables must be set")
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
@@ -85,15 +65,18 @@ class Settings(BaseSettings):
 
     @property
     def sync_database_url(self) -> str:
-        # If DATABASE_URL is provided, use it directly (or convert from async)
+        # If DATABASE_URL is provided, use it (Railway provides this)
         if self.DATABASE_URL:
             db_url = self.DATABASE_URL
-            # Ensure it's the sync version
+            # Ensure it uses psycopg2 driver (for sync operations like Alembic)
             if "postgresql+asyncpg://" in db_url:
                 return db_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
             elif "postgresql://" in db_url:
                 return db_url.replace("postgresql://", "postgresql+psycopg2://")
             return db_url
+        # Fall back to individual connection parameters
+        if not all([self.POSTGRES_USER, self.POSTGRES_PASSWORD, self.POSTGRES_SERVER, self.POSTGRES_DB]):
+            raise ValueError("Either DATABASE_URL or all POSTGRES_* variables must be set")
         return (
             f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
