@@ -39,7 +39,7 @@ export default function OwnerBookingsPage() {
   async function fetchBookings() {
     try {
       const response = await api.owner.bookings();
-      setBookings(response as OwnerBooking[]);
+      setBookings(response as unknown as OwnerBooking[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load bookings");
     } finally {
