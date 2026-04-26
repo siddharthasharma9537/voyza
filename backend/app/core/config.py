@@ -37,12 +37,12 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: list[AnyHttpUrl] = []
 
     # ── Database ─────────────────────────────────────────────────────────────
-    # Railway provides these individual POSTGRES_* variables
-    POSTGRES_SERVER: str = Field(default="localhost")
-    POSTGRES_PORT: int = Field(default=5432)
-    POSTGRES_USER: str = Field(default="postgres")
-    POSTGRES_PASSWORD: str = Field(default="")
-    POSTGRES_DB: str = Field(default="voyza")
+    # Railway provides these individual POSTGRES_* variables (required)
+    POSTGRES_SERVER: str
+    POSTGRES_PORT: int = 5432
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
 
     @property
     def async_database_url(self) -> str:
