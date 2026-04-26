@@ -37,52 +37,26 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: list[AnyHttpUrl] = []
 
     # ── Database ─────────────────────────────────────────────────────────────
-    DATABASE_URL: str = ""  # For Railway (takes precedence)
-    POSTGRES_SERVER: str = ""
+    # Railway provides these individual POSTGRES_* variables
+    POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432
-    POSTGRES_USER: str = ""
-    POSTGRES_PASSWORD: str = ""
-    POSTGRES_DB: str = ""
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
 
     @property
     def async_database_url(self) -> str:
-        # If DATABASE_URL is provided, use it (Railway provides this)
-        if self.DATABASE_URL:
-            db_url = self.DATABASE_URL
-            # Ensure it uses asyncpg driver
-            if "postgresql://" in db_url:
-                return db_url.replace("postgresql://", "postgresql+asyncpg://")
-            elif "postgresql+psycopg2://" in db_url:
-                return db_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
-            return db_url
-        # Fall back to individual connection parameters
-        if self.POSTGRES_USER and self.POSTGRES_PASSWORD and self.POSTGRES_SERVER and self.POSTGRES_DB:
-            return (
-                f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-                f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-            )
-        # Return a placeholder if nothing is configured (will fail at runtime with better error)
-        return "postgresql+asyncpg://user:pass@localhost/db"
+        return (
+            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
 
     @property
     def sync_database_url(self) -> str:
-        # If DATABASE_URL is provided, use it (Railway provides this)
-        if self.DATABASE_URL:
-            db_url = self.DATABASE_URL
-            # Ensure it uses psycopg2 driver (for sync operations like Alembic)
-            if "postgresql+asyncpg://" in db_url:
-                return db_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
-            elif "postgresql://" in db_url:
-                return db_url.replace("postgresql://", "postgresql+psycopg2://")
-            return db_url
-        # Fall back to individual connection parameters
-        if self.POSTGRES_USER and self.POSTGRES_PASSWORD and self.POSTGRES_SERVER and self.POSTGRES_DB:
-            return (
-                f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-                f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-            )
-        # Return a placeholder if nothing is configured (will fail at runtime with better error)
-        return "postgresql+psycopg2://user:pass@localhost/db"
+        return (
+            f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
 
     # ── Redis ────────────────────────────────────────────────────────────────
     REDIS_HOST: str = "localhost"
