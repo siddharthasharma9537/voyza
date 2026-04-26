@@ -88,7 +88,7 @@ class Ride(Base):
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     status: Mapped[RideStatus] = mapped_column(
-        Enum(RideStatus),
+        Enum(RideStatus, values_callable=lambda x: [e.value for e in x], name="ridestatus"),
         default=RideStatus.REQUESTED,
         nullable=False,
     )

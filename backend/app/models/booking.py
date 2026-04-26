@@ -42,7 +42,11 @@ class Booking(Base):
     security_deposit: Mapped[int] = mapped_column(Integer, default=0)
     promo_code: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
-    status: Mapped[BookingStatus] = mapped_column(Enum(BookingStatus), default=BookingStatus.PENDING, nullable=False)
+    status: Mapped[BookingStatus] = mapped_column(
+        Enum(BookingStatus, values_callable=lambda x: [e.value for e in x], name="bookingstatus"),
+        default=BookingStatus.PENDING,
+        nullable=False,
+    )
 
     odometer_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
     odometer_end: Mapped[int | None] = mapped_column(Integer, nullable=True)

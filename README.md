@@ -1,227 +1,308 @@
-# Voyza — Complete Setup Guide
+# 🚗 Voyza - Modern Car Rental Platform
 
-## Prerequisites
-- Docker + Docker Compose
-- Python 3.12 (for local dev without Docker)
-- Node.js 18+ (for frontend)
+A full-stack car rental application built with **Next.js 16**, **FastAPI**, **PostgreSQL**, and **Docker**. Perfect for launching a ride-sharing or vehicle rental business.
 
----
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Status](https://img.shields.io/badge/status-Production%20Ready-brightgreen)
 
-## 1. Quick Start (Docker — recommended)
+## ✨ Features
+
+### 👥 For Customers
+- 🔍 Browse available cars with advanced filters (price, fuel type, transmission, etc.)
+- 📅 Book cars with flexible date/time selection
+- 💰 Real-time pricing calculation
+- 💳 Secure payment via Razorpay
+- ⭐ Rate and review vehicles
+- 📱 Responsive mobile-friendly interface
+
+### 🚗 For Car Owners
+- ➕ List vehicles with multiple photos
+- 📊 Manage availability and pricing
+- 📈 Track bookings and earnings
+- 👁️ Monitor customer reviews
+- 💵 Withdraw earnings
+
+## 🏗️ Tech Stack
+
+### Frontend
+- **Next.js 16.2** - React 19 framework with Turbopack
+- **Tailwind CSS 3.4** - Utility-first styling
+- **TypeScript** - Type-safe JavaScript
+- **Responsive Design** - Mobile-first approach
+
+### Backend
+- **FastAPI 0.111** - Modern Python web framework
+- **SQLAlchemy 2.0** - ORM for database queries
+- **PostgreSQL 16** - Reliable relational database
+- **Redis 7** - Caching layer
+- **Alembic** - Database migrations
+- **Pydantic** - Data validation
+
+### Infrastructure
+- **Docker & Docker Compose** - Containerization
+- **Nginx** - Reverse proxy
+- **JWT** - Secure authentication
+
+### External Services
+- **Razorpay** - Payment processing
+- **AWS S3** - Image storage
+- **SendGrid** - Email notifications
+- **Twilio** - SMS/OTP delivery (ready)
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Docker & Docker Compose (or Node.js 18+ & Python 3.10+)
+- Git
+
+### Local Development
 
 ```bash
-# Clone and enter project
+# Clone the repository
+git clone https://github.com/siddharthasharma9537/voyza.git
 cd voyza
 
-# Copy environment file
-cp backend/.env.example backend/.env
+# Start services with Docker
+docker-compose up
 
-# Edit backend/.env — fill in real values for:
-#   SECRET_KEY, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
-#   RAZORPAY_WEBHOOK_SECRET, TWILIO_ACCOUNT_SID etc.
-# For local dev, the defaults work for DB + Redis
-
-# Start all services
-docker-compose up -d
-
-# Run migrations
-docker-compose exec api alembic upgrade head
-
-# Seed with sample data
-docker-compose exec api python scripts/seed.py
-
-# API is live at:
-#   http://localhost:8000
-#   http://localhost:8000/docs  (Swagger UI — dev only)
+# Services will be available at:
+# Frontend: http://localhost:3000
+# API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
 ```
 
----
+### Manual Setup (Without Docker)
 
-## 2. Local Dev (without Docker)
-
+**Backend:**
 ```bash
 cd backend
-
-# Create virtualenv
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-
-# Install deps
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Start PostgreSQL + Redis (using Docker just for these)
-docker-compose up -d db redis
-
-# Copy and configure .env
-cp .env.example .env
-
-# Run migrations
-alembic upgrade head
-
-# Seed database
-python scripts/seed.py
-
-# Start server (hot reload)
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload
 ```
 
----
+**Frontend:**
+```bash
+cd frontend-web
+npm install
+npm run dev
+```
 
-## 3. Run Tests
+## 📁 Project Structure
+
+```
+voyza/
+├── frontend-web/                 # Next.js application
+│   ├── app/                     # App directory (pages, layouts)
+│   ├── components/              # Reusable React components
+│   ├── lib/                     # Utilities (API client, auth)
+│   ├── public/                  # Static assets
+│   ├── package.json
+│   └── tailwind.config.ts       # Tailwind configuration
+│
+├── backend/                      # FastAPI application
+│   ├── app/
+│   │   ├── main.py              # Application factory
+│   │   ├── api/v1/endpoints/    # Route handlers
+│   │   ├── models/              # SQLAlchemy ORM models
+│   │   ├── schemas/             # Pydantic request/response models
+│   │   ├── services/            # Business logic
+│   │   ├── core/                # Configuration
+│   │   └── db/                  # Database setup
+│   ├── alembic/                 # Database migrations
+│   └── requirements.txt
+│
+├── docker-compose.yml           # Local development setup
+├── docker-compose.prod.yml      # Production setup (optional)
+├── .env.example                 # Environment variables template
+└── README.md                     # This file
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Copy `.env.example` files to `.env` and fill in your values:
+
+**Backend** (`backend/.env`):
+```bash
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/voyza_db
+REDIS_HOST=localhost
+JWT_SECRET=your-secret-key-here
+RAZORPAY_KEY_ID=your_key_id
+RAZORPAY_KEY_SECRET=your_secret
+```
+
+**Frontend** (`frontend-web/.env.local`):
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+```
+
+## 📚 API Documentation
+
+Auto-generated API documentation available at:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+### Key Endpoints
+
+```
+# Authentication
+POST   /api/v1/auth/register          - Register new user
+POST   /api/v1/auth/login             - Login with phone & password
+POST   /api/v1/auth/verify-otp        - Verify OTP for login
+GET    /api/v1/auth/me                - Get current user
+
+# Vehicles (Public)
+GET    /api/v1/vehicles               - Browse vehicles
+GET    /api/v1/vehicles/{id}          - Get vehicle details
+GET    /api/v1/vehicles/{id}/reviews  - Get vehicle reviews
+
+# Bookings (Authenticated)
+GET    /api/v1/bookings               - Get user's bookings
+POST   /api/v1/bookings               - Create booking
+POST   /api/v1/bookings/{id}/cancel   - Cancel booking
+POST   /api/v1/bookings/preview       - Calculate pricing
+
+# Owner Dashboard (Owner Role)
+GET    /api/v1/owner/cars             - List owner's vehicles
+POST   /api/v1/owner/cars             - Add new vehicle
+PATCH  /api/v1/owner/cars/{id}        - Update vehicle
+GET    /api/v1/owner/earnings         - View earnings
+
+# Reviews
+POST   /api/v1/reviews                - Submit review
+PATCH  /api/v1/reviews/{id}           - Add owner reply
+```
+
+## 🔐 Security Features
+
+- ✅ JWT-based authentication
+- ✅ Password hashing with bcrypt
+- ✅ CORS protection
+- ✅ Rate limiting (60 requests/minute)
+- ✅ SQL injection prevention (SQLAlchemy)
+- ✅ HTTPS ready with Let's Encrypt
+
+## 📊 Database Schema
+
+### Core Tables
+- **users** - User accounts (customers & owners)
+- **vehicles** - Car listings
+- **vehicle_images** - Photos for each vehicle
+- **bookings** - Rental reservations
+- **payments** - Payment records
+- **reviews** - User reviews
+- **availability** - Blocked/booked time slots
+- **refresh_tokens** - Session management
+
+## 🚢 Deployment
+
+### Quick Deploy to DigitalOcean
 
 ```bash
-cd backend
+# 1. Create Ubuntu 22.04 droplet ($12/month)
+# 2. SSH into server
+ssh root@your_server_ip
 
-# All tests
+# 3. Clone repository and configure
+git clone https://github.com/yourusername/voyza.git
+cd voyza
+cp backend/.env.example backend/.env
+cp frontend-web/.env.example frontend-web/.env.local
+
+# 4. Update .env with production values
+nano backend/.env
+
+# 5. Deploy with Docker
+docker-compose -f docker-compose.prod.yml up -d
+docker-compose -f docker-compose.prod.yml exec api alembic upgrade head
+```
+
+See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for detailed production deployment steps.
+
+## 📈 Monthly Cost Estimate
+
+| Service | Cost | Notes |
+|---------|------|-------|
+| Server (2GB) | $12 | DigitalOcean |
+| Domain | $10-15/yr | GoDaddy, Namecheap |
+| SSL | Free | Let's Encrypt |
+| S3 Storage | ~$5 | AWS (50GB) |
+| Email | Free-$30 | SendGrid |
+| SMS | Pay-per-use | Twilio |
+| Payment | 2% + ₹3 | Razorpay commission |
+| **Estimated Total** | **~$50-80/month** | (excl. transactions) |
+
+## 🧪 Testing
+
+```bash
+# Backend tests
+cd backend
 pytest
 
-# Unit tests only (fast, no DB)
-pytest tests/unit/ -v
-
-# Integration tests
-pytest tests/integration/ -v
-
-# With coverage
-pytest --cov=app --cov-report=html
-# Open htmlcov/index.html to view coverage report
-
-# Run specific test file
-pytest tests/unit/test_booking_service.py -v
+# Frontend tests
+cd frontend-web
+npm run test
 ```
 
----
+## 🐛 Troubleshooting
 
-## 4. Postman Setup
+### "Cannot validate credentials" error
+- Clear browser localStorage: `localStorage.clear()`
+- Sign up again with a new account
+- Check JWT_SECRET matches between frontend & backend
 
-1. Open Postman → Import → select `voyza_postman_collection.json`
-2. Collection variables are pre-configured
-3. Run requests in this order:
-   - **Auth / Send OTP** → note the OTP in response (dev mode)
-   - **Auth / Verify OTP** → token auto-saved to `{{access_token}}`
-   - **Cars / Browse Cars** → `car_id` auto-saved
-   - **Bookings / Create Booking** → `booking_id` auto-saved
-   - **Payments / Create Razorpay Order** → test the payment flow
+### Database connection failed
+- Verify PostgreSQL is running: `docker-compose ps`
+- Check DATABASE_URL in `.env`
+- Ensure port 5432 is not blocked
 
----
+### CORS errors
+- Update `BACKEND_CORS_ORIGINS` in `backend/.env`
+- Must match your frontend URL exactly
+- Restart API after changes
 
-## 5. Test Credentials (after seeding)
+### API returning 500 errors
+- Check logs: `docker-compose logs api`
+- Verify all required environment variables are set
+- Ensure database migrations ran: `alembic upgrade head`
 
-| Role     | Phone          | Password        |
-|----------|----------------|-----------------|
-| Admin    | +919000000001  | Admin@1234      |
-| Owner    | +919876543210  | Owner@1234      |
-| Customer | +919834567890  | Customer@1234   |
+## 📝 Contributing
 
-**Dev OTP:** In DEBUG mode, OTP is returned in the API response. Use it directly.
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open Pull Request
 
----
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
-## 6. Key URLs
+## 📄 License
 
-| Service         | URL                                    |
-|-----------------|----------------------------------------|
-| API             | http://localhost:8000                  |
-| Swagger UI      | http://localhost:8000/docs             |
-| Health check    | http://localhost:8000/health           |
-| Flower (Celery) | http://localhost:5555                  |
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
 
----
+## 👨‍💻 Author
 
-## 7. Start Celery Worker + Beat
+**Siddharta Sharma**
+- GitHub: [@siddharthasharma9537](https://github.com/siddharthasharma9537)
+- Email: your.email@example.com
 
-```bash
-# Worker (background tasks)
-celery -A app.tasks.celery_app worker --loglevel=info
+## 🙏 Acknowledgments
 
-# Beat scheduler (reminders, cleanup)
-celery -A app.tasks.celery_app beat --loglevel=info
+- Built with [Next.js](https://nextjs.org/)
+- Backend powered by [FastAPI](https://fastapi.tiangolo.com/)
+- Database with [PostgreSQL](https://www.postgresql.org/)
+- Payments via [Razorpay](https://razorpay.com/)
 
-# Both together (dev only)
-celery -A app.tasks.celery_app worker --beat --loglevel=info
-```
+## 📧 Support
 
----
-
-## 8. WebSocket Testing
-
-```bash
-# Install wscat
-npm install -g wscat
-
-# Get your access token first via /auth/login
-TOKEN="your_access_token_here"
-BOOKING_ID="your_booking_id_here"
-USER_ID="your_user_id_here"
-
-# Track a booking (customer view)
-wscat -c "ws://localhost:8000/ws/track/$BOOKING_ID?token=$TOKEN"
-
-# Personal notifications
-wscat -c "ws://localhost:8000/ws/notify/$USER_ID?token=$TOKEN"
-
-# Send GPS update as owner
-# After connecting to tracking ws, paste this JSON:
-# {"lat": 17.385, "lng": 78.486, "speed_kmph": 45, "heading": 270}
-```
+Have questions or need help? 
+- 📝 Create an [issue](https://github.com/siddharthasharma9537/voyza/issues)
+- 💬 Start a [discussion](https://github.com/siddharthasharma9537/voyza/discussions)
+- 📧 Email: your.email@example.com
 
 ---
 
-## 9. Production Deployment
-
-```bash
-# Build production image
-docker build -t voyza-api:latest backend/
-
-# Run production stack
-docker-compose -f docker-compose.prod.yml up -d
-
-# Run migrations before swapping
-docker-compose -f docker-compose.prod.yml run --rm api alembic upgrade head
-
-# Check logs
-docker-compose -f docker-compose.prod.yml logs -f api
-```
-
----
-
-## 10. Promo Codes (Test)
-
-| Code       | Discount           | Conditions                    |
-|------------|--------------------|-------------------------------|
-| WELCOME10  | ₹100 flat off      | First use, min booking ₹500   |
-| HYDLOVE20  | 20% off            | Hyderabad only, max 2 uses    |
-| EV2026     | ₹200 off           | Electric vehicles only        |
-| WEEKEND25  | 25% off            | Min booking ₹1,200            |
-
----
-
-## Architecture Summary
-
-```
-┌─────────────────────────────────────────────────────┐
-│                    Clients                          │
-│  Customer Web (Next.js) │ Owner App │ Admin Panel   │
-└──────────────┬──────────────────────────────────────┘
-               │ HTTP + WebSocket
-┌──────────────▼──────────────────────────────────────┐
-│              Nginx (SSL, rate limiting)              │
-└──────────────┬──────────────────────────────────────┘
-               │
-┌──────────────▼──────────────────────────────────────┐
-│           FastAPI Backend (2 replicas)               │
-│                                                     │
-│  Auth │ Cars │ Bookings │ Owner │ Admin             │
-│  Payments │ Reviews │ Realtime (WS)                 │
-└──────┬───────────────────────────────────┬──────────┘
-       │                                   │
-┌──────▼──────┐                    ┌───────▼───────┐
-│ PostgreSQL  │                    │     Redis     │
-│  (primary   │                    │  (cache, WS,  │
-│   + read    │                    │   Celery)     │
-│   replica)  │                    └───────────────┘
-└─────────────┘
-                    ┌──────────────────────────┐
-                    │   Celery Worker + Beat   │
-                    │  SMS │ Push │ Reminders  │
-                    └──────────────────────────┘
-```
+**Built with ❤️ for the open-source community**

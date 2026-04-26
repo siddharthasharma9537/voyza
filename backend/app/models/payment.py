@@ -32,7 +32,10 @@ class Payment(Base):
         nullable=False,
     )
 
-    gateway: Mapped[PaymentGateway] = mapped_column(Enum(PaymentGateway), nullable=False)
+    gateway: Mapped[PaymentGateway] = mapped_column(
+        Enum(PaymentGateway, values_callable=lambda x: [e.value for e in x], name="paymentgateway"),
+        nullable=False,
+    )
     gateway_order_id: Mapped[str] = mapped_column(String(100), nullable=False)
     gateway_payment_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     gateway_signature: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -40,7 +43,11 @@ class Payment(Base):
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="INR")
 
-    status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus), default=PaymentStatus.CREATED, nullable=False)
+    status: Mapped[PaymentStatus] = mapped_column(
+        Enum(PaymentStatus, values_callable=lambda x: [e.value for e in x], name="paymentstatus"),
+        default=PaymentStatus.CREATED,
+        nullable=False,
+    )
 
     refund_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
