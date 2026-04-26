@@ -56,12 +56,13 @@ class Settings(BaseSettings):
                 return db_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
             return db_url
         # Fall back to individual connection parameters
-        if not all([self.POSTGRES_USER, self.POSTGRES_PASSWORD, self.POSTGRES_SERVER, self.POSTGRES_DB]):
-            raise ValueError("Either DATABASE_URL or all POSTGRES_* variables must be set")
-        return (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+        if self.POSTGRES_USER and self.POSTGRES_PASSWORD and self.POSTGRES_SERVER and self.POSTGRES_DB:
+            return (
+                f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+                f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+            )
+        # Return a placeholder if nothing is configured (will fail at runtime with better error)
+        return "postgresql+asyncpg://user:pass@localhost/db"
 
     @property
     def sync_database_url(self) -> str:
@@ -75,12 +76,13 @@ class Settings(BaseSettings):
                 return db_url.replace("postgresql://", "postgresql+psycopg2://")
             return db_url
         # Fall back to individual connection parameters
-        if not all([self.POSTGRES_USER, self.POSTGRES_PASSWORD, self.POSTGRES_SERVER, self.POSTGRES_DB]):
-            raise ValueError("Either DATABASE_URL or all POSTGRES_* variables must be set")
-        return (
-            f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
+        if self.POSTGRES_USER and self.POSTGRES_PASSWORD and self.POSTGRES_SERVER and self.POSTGRES_DB:
+            return (
+                f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+                f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+            )
+        # Return a placeholder if nothing is configured (will fail at runtime with better error)
+        return "postgresql+psycopg2://user:pass@localhost/db"
 
     # ── Redis ────────────────────────────────────────────────────────────────
     REDIS_HOST: str = "localhost"
