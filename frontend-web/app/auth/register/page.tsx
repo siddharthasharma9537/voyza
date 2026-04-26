@@ -6,24 +6,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { saveTokens, saveUser } from "@/lib/auth";
 
-// Country codes and their phone number lengths
-const COUNTRIES = [
-  { code: "91", country: "🇮🇳 India", length: 10 },
-  { code: "1", country: "🇺🇸 United States", length: 10 },
-  { code: "44", country: "🇬🇧 United Kingdom", length: 10 },
-  { code: "61", country: "🇦🇺 Australia", length: 9 },
-  { code: "1", country: "🇨🇦 Canada", length: 10 },
-  { code: "86", country: "🇨🇳 China", length: 11 },
-];
-
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const defaultRole = searchParams.get("role") === "owner" ? "owner" : "customer";
 
   const [fullName, setFullName] = useState("");
-  const [countryCode, setCountryCode] = useState("91"); // Default to India
-  const [phoneLocal, setPhoneLocal] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"customer" | "owner">(defaultRole as "customer" | "owner");
   const [loading, setLoading] = useState(false);
@@ -31,30 +20,23 @@ function RegisterForm() {
 
   // Format phone number: remove all non-digits as user types
   const handlePhoneChange = (value: string) => {
-    const digitsOnly = value.replace(/\D/g, "");
-    setPhoneLocal(digitsOnly);
+    const digitsOnly = value.replace(/\D/g, "").slice(0, 10);
+    setPhone(digitsOnly);
   };
 
-  // Get the current country's phone length
-  const currentCountry = COUNTRIES.find(c => c.code === countryCode);
-  const expectedLength = currentCountry?.length || 10;
-
-  // Format as E.164 (+{countryCode}{localPhone})
-  const formattedPhone = phoneLocal ? `+${countryCode}${phoneLocal}` : "";
-
-  // Validation: phone must have correct length
-  const isPhoneValid = phoneLocal.length === expectedLength;
+  // Validation: phone must have 10 digits
+  const isPhoneValid = phone.length === 10;
 
   async function handleRegister() {
     if (!isPhoneValid) {
-      setError(`Phone number must be ${expectedLength} digits`);
+      setError("Phone number must be 10 digits");
       return;
     }
 
     setLoading(true); setError("");
     try {
-      await api.auth.register({ full_name: fullName, phone: formattedPhone, password, role });
-      const tokens = await api.auth.login(formattedPhone, password);
+      await api.auth.register({ full_name: fullName, phone, password, role });
+      const tokens = await api.auth.login(phone, password);
       saveTokens(tokens);
       const user = await api.auth.me();
       saveUser(user);
@@ -99,37 +81,16 @@ function RegisterForm() {
               className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
           </div>
 
-          {/* Country Code + Phone */}
+          {/* Phone */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1">Phone number</label>
-            <div className="flex gap-2">
-              {/* Country selector */}
-              <select value={countryCode} onChange={(e) => setCountryCode(e.target.value)}
-                className="flex-shrink-0 border border-slate-200 rounded-lg px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white">
-                {COUNTRIES.map(c => (
-                  <option key={c.code + c.country} value={c.code}>{c.country}</option>
-                ))}
-              </select>
-
-              {/* Phone input */}
-              <div className="flex-1 relative">
-                <input type="tel" value={phoneLocal} onChange={(e) => handlePhoneChange(e.target.value)}
-                  placeholder={`${expectedLength} digits`}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
-                {phoneLocal && (
-                  <div className="absolute right-3 top-2.5 text-xs text-slate-400">
-                    {phoneLocal.length}/{expectedLength}
-                  </div>
-                )}
-              </div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">Phone (10 digits)</label>
+            <div className="flex gap-1 items-center">
+              <span className="text-slate-500 px-3 py-2.5 text-sm font-medium">+91</span>
+              <input type="tel" value={phone} onChange={(e) => handlePhoneChange(e.target.value)}
+                placeholder="9876543210"
+                maxLength={10}
+                className="flex-1 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
             </div>
-
-            {/* Display formatted number */}
-            {formattedPhone && (
-              <p className="text-xs text-slate-500 mt-1">
-                Formatted: <span className="font-mono font-semibold text-slate-700">{formattedPhone}</span>
-              </p>
-            )}
           </div>
 
           <div>

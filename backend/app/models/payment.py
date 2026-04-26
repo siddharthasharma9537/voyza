@@ -56,6 +56,7 @@ class Payment(Base):
     gateway_response: Mapped[dict] = mapped_column(JSONB, default=dict)
 
     booking: "Booking" = relationship("Booking", back_populates="payments")
+    refunds: list["Refund"] = relationship("Refund", back_populates="payment", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_payments_booking_id", "booking_id"),

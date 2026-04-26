@@ -62,6 +62,16 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    notifications: list["Notification"] = relationship(
+        "Notification",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    kyc_documents: list["KYCDocument"] = relationship(
+        "KYCDocument",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     driver_profile: "Driver" = relationship("Driver", back_populates="user", uselist=False)
 
     __table_args__ = (

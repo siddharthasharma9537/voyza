@@ -75,13 +75,13 @@ async def list_bookings(
     return await booking_service.get_customer_bookings(current_user.id, db)
 
 
-@router.get("/{booking_id}", response_model=BookingResponse)
+@router.get("/{booking_id}", response_model=dict)
 async def get_booking(
     booking_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get a single booking. Only the customer, owner, or admin can view."""
+    """Get a single booking with full details. Only the customer, owner, or admin can view."""
     from sqlalchemy import select
     from app.models.models import Booking, UserRole
     from fastapi import HTTPException
@@ -100,7 +100,7 @@ async def get_booking(
     if not is_authorized:
         raise HTTPException(403, "Not authorized")
 
-    return BookingResponse.model_validate(booking)
+    return await booking_service.get_booking_detail(booking_id, db)
 
 
 @router.post("/{booking_id}/cancel", response_model=BookingResponse)
@@ -119,3 +119,48 @@ async def cancel_booking(
         db=db,
     )
     return BookingResponse.model_validate(booking)
+
+
+@router.get("/refunds", tags=["Refunds"])
+async def list_refunds(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all refunds for the current customer."""
+    from sqlalchemy import select, join, and_
+    from app.models.models import Refund, Booking, Vehicle
+
+    result = await db.execute(
+        select(Refund, Booking, Vehicle)
+        .join(Booking, Booking.id == Refund.booking_id)
+        .join(Vehicle, Vehicle.id == Booking.vehicle_id)
+        .where(Booking.customer_id == current_user.id)
+        .order_by(Refund.requested_at.desc())
+    )
+    rows = result.all()
+
+    return [
+        {
+            "id": row.Refund.id,
+            "booking_id": row.Booking.id,
+            "booking_reference": f"VOY-{row.Booking.created_at.strftime('%Y%m%d')}-{row.Booking.id[:8].upper()}",
+            "vehicle_name": f"{row.Vehicle.make} {row.Vehicle.model}",
+            "cancellation_date": row.Booking.cancelled_at.isoformat() if row.Booking.cancelled_at else None,
+            "refund_amount": row.Refund.approved_amount,
+            "status": row.Refund.status.value,
+            "expected_date": row.Refund.refunded_at.isoformat() if row.Refund.refunded_at else None,
+            "created_at": row.Refund.requested_at.isoformat(),
+        }
+        for row in rows
+    ]
+
+
+@router.get("/reminders", tags=["Reminders"])
+async def get_reminders(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get upcoming reminders for the current customer's bookings."""
+    from app.services.reminder_service import get_upcoming_reminders
+
+    return await get_upcoming_reminders(current_user.id, db)

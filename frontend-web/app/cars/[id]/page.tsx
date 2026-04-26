@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import VaadinDateTimePicker from "@/components/VaadinDateTimePicker";
 import { api, formatRupees, fuelLabel, transmissionLabel } from "@/lib/api";
 import { getStoredUser } from "@/lib/auth";
 import type { VehicleDetail, PricingBreakdown } from "@/lib/api";
@@ -29,6 +30,29 @@ export default function CarDetailPage() {
       .catch(() => setError("Car not found or not available."))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Auto-populate drop-off when pick-up is set, or fix if invalid
+  useEffect(() => {
+    if (pickup) {
+      const pickupDate = new Date(pickup);
+
+      if (!dropoff) {
+        // Set drop-off to next day at same time
+        const dropoffDate = new Date(pickupDate);
+        dropoffDate.setDate(dropoffDate.getDate() + 1);
+        setDropoff(dropoffDate.toISOString());
+      } else {
+        // Check if drop-off is before or equal to pick-up, and auto-correct
+        const dropoffDate = new Date(dropoff);
+        if (dropoffDate <= pickupDate) {
+          // Auto-set drop-off to next day
+          const correctedDropoff = new Date(pickupDate);
+          correctedDropoff.setDate(correctedDropoff.getDate() + 1);
+          setDropoff(correctedDropoff.toISOString());
+        }
+      }
+    }
+  }, [pickup]);
 
   async function getPreview() {
     if (!pickup || !dropoff) return;
@@ -149,53 +173,83 @@ export default function CarDetailPage() {
 
         {/* Right: booking widget */}
         <div className="lg:col-span-2">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 sticky top-24 shadow-sm">
-            <div className="flex items-baseline gap-2 mb-6">
-              <span className="text-2xl font-bold text-slate-900">{formatRupees(vehicle.price_per_day)}</span>
-              <span className="text-slate-500">/day</span>
-              <span className="text-slate-400 text-sm ml-2">{formatRupees(vehicle.price_per_hour)}/hr</span>
-            </div>
-
-            <div className="space-y-3 mb-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Pick-up</label>
-                <input type="datetime-local" value={pickup} onChange={(e) => setPickup(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Drop-off</label>
-                <input type="datetime-local" value={dropoff} onChange={(e) => setDropoff(e.target.value)}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+          <div className="bg-gradient-to-b from-white to-slate-50 border-2 border-sky-200 rounded-3xl p-5 sm:p-8 sticky top-20 sm:top-24 shadow-xl">
+            {/* Price Header - Eye catching */}
+            <div className="bg-gradient-to-r from-sky-50 to-indigo-50 p-4 rounded-2xl mb-6 border border-sky-300">
+              <span className="text-xs text-sky-700 font-bold uppercase tracking-wide block mb-2">Starting price</span>
+              <div className="flex items-end justify-between">
+                <span className="text-4xl font-bold text-sky-900">{formatRupees(vehicle.price_per_day)}</span>
+                <div className="text-right">
+                  <span className="text-sky-700 block text-sm font-semibold">/day</span>
+                  <span className="text-xs text-sky-600 font-medium">{formatRupees(vehicle.price_per_hour)}/hr</span>
+                </div>
               </div>
             </div>
 
-            <button onClick={getPreview} disabled={!pickup || !dropoff || previewLoading}
-              className="w-full border border-sky-600 text-sky-600 rounded-lg py-2.5 text-sm font-semibold hover:bg-sky-50 disabled:opacity-40 mb-3">
-              {previewLoading ? "Calculating…" : "Check price"}
-            </button>
+            <div className="space-y-3 mb-6">
+              <VaadinDateTimePicker label="Pick-up" value={pickup} onChange={setPickup} />
+              <VaadinDateTimePicker
+                label="Drop-off"
+                value={dropoff}
+                onChange={setDropoff}
+                showTomorrow
+                minDateTime={pickup}
+              />
+            </div>
+
+            {!preview && pickup && dropoff && (
+              <button onClick={getPreview} disabled={previewLoading}
+                className="w-full border border-sky-600 text-sky-600 rounded-lg py-2.5 text-sm font-semibold hover:bg-sky-50 disabled:opacity-40 mb-3 transition-colors">
+                {previewLoading ? "Calculating…" : "Calculate total price"}
+              </button>
+            )}
 
             {preview && (
-              <div className="bg-slate-50 rounded-xl p-4 mb-4 space-y-1.5 text-sm">
-                <Row label="Base" value={formatRupees(preview.base_amount)} />
-                {preview.discount_amount > 0 && <Row label="Discount" value={`−${formatRupees(preview.discount_amount)}`} className="text-green-600" />}
-                <Row label="Tax" value={formatRupees(preview.tax_amount)} />
-                <Row label="Security deposit" value={formatRupees(preview.security_deposit)} />
-                <hr className="border-slate-200" />
-                <Row label="Total" value={formatRupees(preview.total_amount)} className="font-bold text-slate-900" />
+              <div className="bg-gradient-to-br from-emerald-50 via-blue-50 to-purple-50 rounded-2xl p-5 mb-5 space-y-2.5 text-sm border-2 border-emerald-300 shadow-md">
+                <div className="flex justify-between items-center pb-3 border-b-2 border-emerald-300 bg-white/50 p-3 rounded-lg">
+                  <span className="text-slate-700 font-semibold">📅 Duration</span>
+                  <span className="font-bold text-emerald-700 text-base">
+                    {preview.duration_days > 0
+                      ? `${preview.duration_days}d ${preview.duration_hours % 24}h`
+                      : `${preview.duration_hours}h`}
+                  </span>
+                </div>
+                <div className="space-y-2 bg-white/40 p-3 rounded-lg">
+                  <Row label="Base fare" value={formatRupees(preview.base_amount)} />
+                  {preview.discount_amount > 0 && <Row label="💰 Discount" value={`−${formatRupees(preview.discount_amount)}`} className="text-green-600 font-bold text-base" />}
+                  <Row label="Tax & fees" value={formatRupees(preview.tax_amount)} />
+                </div>
+                <div className="bg-white/60 p-3 rounded-lg border-l-4 border-sky-500">
+                  <div className="text-xs text-slate-600 mb-1.5">🔒 Security deposit (refunded)</div>
+                  <span className="text-slate-600 text-xs">{formatRupees(preview.security_deposit)}</span>
+                </div>
+                <div className="bg-gradient-to-r from-sky-600 to-indigo-600 rounded-xl p-4 mt-3">
+                  <div className="text-white/90 text-xs font-medium mb-1">💳 Total amount to pay</div>
+                  <div className="text-3xl font-bold text-white">{formatRupees(preview.total_amount)}</div>
+                </div>
               </div>
             )}
 
             {bookingError && (
-              <p className="text-red-600 text-sm mb-3">{bookingError}</p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-700">
+                {bookingError}
+              </div>
             )}
 
             <button onClick={book} disabled={!pickup || !dropoff || bookingLoading}
-              className="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-40">
-              {bookingLoading ? "Booking…" : "Book now"}
+              className="w-full bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 text-white font-semibold py-3 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed mb-3">
+              {bookingLoading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="animate-spin">⏳</span> Confirming booking…
+                </span>
+              ) : (
+                "Confirm booking"
+              )}
             </button>
 
-            <p className="text-xs text-slate-400 text-center mt-3">
-              Security deposit of {formatRupees(vehicle.security_deposit)} refunded after trip
+            <p className="text-xs text-slate-500 text-center space-y-1">
+              <div>Security deposit: {formatRupees(vehicle.security_deposit)}</div>
+              <div className="text-slate-400">Refunded after trip completion</div>
             </p>
           </div>
         </div>

@@ -18,6 +18,7 @@ All owner-facing API endpoints. Requires OWNER or ADMIN role.
 """
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_owner, get_current_user
@@ -240,6 +241,16 @@ async def get_bookings(
     return await owner_service.get_owner_bookings(owner.id, db)
 
 
+@router.get("/bookings/{booking_id}")
+async def get_booking_detail(
+    booking_id: str,
+    owner: User = OwnerUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get full booking details for a specific booking (owner view)."""
+    return await owner_service.get_owner_booking_detail(booking_id, owner.id, db)
+
+
 @router.post("/bookings/{booking_id}/accept")
 async def accept_booking(
     booking_id: str,
@@ -249,6 +260,72 @@ async def accept_booking(
     """Accept a pending booking (for non-instant-booking mode)."""
     booking = await owner_service.accept_booking(booking_id, owner, db)
     return {"id": booking.id, "status": booking.status}
+
+
+# ═══════════════════════════════════════════════════════════════ CHECKLISTS
+
+@router.get("/bookings/{booking_id}/checklists/{checklist_type}")
+async def get_checklist(
+    booking_id: str,
+    checklist_type: str,  # "pre_pickup" or "post_return"
+    owner: User = OwnerUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get checklist items for a booking (pre-pickup or post-return)."""
+    from app.models.models import Booking, ChecklistType
+    from app.services import checklist_service
+
+    # Verify ownership
+    booking_result = await db.execute(select(Booking).where(Booking.id == booking_id))
+    booking = booking_result.scalar_one_or_none()
+
+    if not booking or booking.owner_id != owner.id:
+        raise HTTPException(404, "Booking not found or you don't have access")
+
+    try:
+        ctype = ChecklistType(checklist_type)
+    except ValueError:
+        raise HTTPException(400, f"Invalid checklist type: {checklist_type}")
+
+    items = await checklist_service.get_checklist(booking_id, ctype, db)
+    return {"checklist_type": checklist_type, "items": items}
+
+
+@router.post("/bookings/{booking_id}/checklists/{checklist_type}/{item_id}")
+async def update_checklist_item(
+    booking_id: str,
+    checklist_type: str,
+    item_id: str,
+    body: dict,  # {"completed": True}
+    owner: User = OwnerUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark a specific checklist item as completed/incomplete."""
+    from app.models.models import Booking, ChecklistType
+    from app.services import checklist_service
+
+    # Verify ownership
+    booking_result = await db.execute(select(Booking).where(Booking.id == booking_id))
+    booking = booking_result.scalar_one_or_none()
+
+    if not booking or booking.owner_id != owner.id:
+        raise HTTPException(404, "Booking not found or you don't have access")
+
+    try:
+        ctype = ChecklistType(checklist_type)
+    except ValueError:
+        raise HTTPException(400, f"Invalid checklist type: {checklist_type}")
+
+    await checklist_service.update_checklist_item(
+        booking_id=booking_id,
+        checklist_type=ctype,
+        item_id=item_id,
+        completed=body.get("completed", False),
+        db=db,
+    )
+
+    items = await checklist_service.get_checklist(booking_id, ctype, db)
+    return {"checklist_type": checklist_type, "items": items}
 
 
 # ═══════════════════════════════════════════════════════════════ EARNINGS

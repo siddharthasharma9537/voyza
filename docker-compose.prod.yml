@@ -1,29 +1,28 @@
-version: "3.9"
+version: '3.8'
 
-# ── Production docker-compose ─────────────────────────────────────────────────
-# Usage:
-#   docker-compose -f docker-compose.prod.yml up -d
-#
-# Required env vars (set in .env or secrets manager):
-#   POSTGRES_PASSWORD, SECRET_KEY, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET,
-#   RAZORPAY_WEBHOOK_SECRET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
-#   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, REDIS_PASSWORD
+# ── Production Docker Compose ──────────────────────────────────────────────────
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+# Ensure .env file contains all required variables
 
 services:
 
-  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  # ── PostgreSQL Database ────────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
+    container_name: voyza-postgres-prod
     restart: always
     environment:
-      POSTGRES_USER:     voyza
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB:       voyza_db
+      POSTGRES_USER: ${DB_USER:-voyza}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-voyza_db}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./backups:/backups
+    networks:
+      - voyza-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U voyza"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-voyza}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,114 +31,178 @@ services:
         limits:
           memory: 2G
 
-  # ── Redis ───────────────────────────────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
+  # ── MinIO Object Storage ────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: voyza-minio-prod
     restart: always
-    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_CONSOLE_ADDRESS: ":9001"
+      MINIO_DOMAIN: ${MINIO_DOMAIN:-minio.voyzacar.online}
     volumes:
-      - redis_data:/data
+      - minio_data:/data
+    networks:
+      - voyza-network
+    command: server /data --console-address ":9001"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
-  # ── FastAPI (multiple replicas for HA) ────────────────────────────────────────
-  api:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    restart: always
-    env_file: ./backend/.env
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: >
-      uvicorn app.main:app
-        --host 0.0.0.0
-        --port 8000
-        --workers 4
-        --loop uvloop
-        --http httptools
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    expose:
+      - "9000"
+      - "9001"
     deploy:
-      replicas: 2
       resources:
         limits:
           memory: 1G
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # ── Celery Worker ─────────────────────────────────────────────────────────────
-  celery_worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+  # ── Redis Cache ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: voyza-redis-prod
     restart: always
-    env_file: ./backend/.env
-    depends_on:
-      redis:
-        condition: service_healthy
-      db:
-        condition: service_healthy
-    command: >
-      celery -A app.tasks.celery_app worker
-        --loglevel=info
-        --concurrency=4
-        --queues=default,notifications,maintenance
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - voyza-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    expose:
+      - "6379"
     deploy:
       resources:
         limits:
           memory: 512M
 
-  # ── Celery Beat (scheduler) ───────────────────────────────────────────────────
-  celery_beat:
+  # ── FastAPI Backend (with Gunicorn) ────────────────────────────────────────────
+  api:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    container_name: voyza-api-prod
     restart: always
-    env_file: ./backend/.env
     depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A app.tasks.celery_app beat --loglevel=info --scheduler=redbeat.RedBeatScheduler
+    environment:
+      # Database
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-voyza}:${DB_PASSWORD}@db:5432/${DB_NAME:-voyza_db}
+
+      # MinIO/S3
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-voyza-documents}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT:-http://minio:9000}
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      # Security
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: "false"
+
+      # CORS
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://voyzacar.online,https://www.voyzacar.online,https://api.voyzacar.online}
+    volumes:
+      - ./backend:/app
+    networks:
+      - voyza-network
+    expose:
+      - "8000"
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        gunicorn app.main:app
+          --workers 4
+          --worker-class uvicorn.workers.UvicornWorker
+          --bind 0.0.0.0:8000
+          --timeout 120
+          --access-logfile -
+          --error-logfile -
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     deploy:
-      replicas: 1   # MUST be exactly 1 — multiple beat schedulers = duplicate tasks
+      resources:
+        limits:
+          memory: 1G
 
-  # ── Flower (Celery monitoring — internal only) ────────────────────────────────
-  flower:
+  # ── Next.js Frontend ──────────────────────────────────────────────────────────
+  web:
     build:
-      context: ./backend
+      context: ./frontend-web
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.voyzacar.online/api/v1}
+    container_name: voyza-web-prod
     restart: always
-    env_file: ./backend/.env
-    command: celery -A app.tasks.celery_app flower --port=5555 --basic_auth=admin:${FLOWER_PASSWORD}
-    ports:
-      - "127.0.0.1:5555:5555"   # bind to localhost only — expose via Nginx with auth
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.voyzacar.online/api/v1}
+      NODE_ENV: production
+    networks:
+      - voyza-network
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
-  # ── Nginx ─────────────────────────────────────────────────────────────────────
+  # ── Nginx Reverse Proxy & SSL ──────────────────────────────────────────────────
   nginx:
-    image: nginx:1.25-alpine
+    image: nginx:alpine
+    container_name: voyza-nginx-prod
     restart: always
+    depends_on:
+      - api
+      - web
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/sites-available/voyza:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./ssl:/etc/nginx/ssl:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
-      - /var/log/nginx:/var/log/nginx
-    depends_on:
-      - api
+      - nginx_cache:/var/cache/nginx
+    networks:
+      - voyza-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   postgres_data:
+  minio_data:
   redis_data:
+  nginx_cache:
 
 networks:
-  default:
+  voyza-network:
     driver: bridge

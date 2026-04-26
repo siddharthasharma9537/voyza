@@ -127,6 +127,54 @@ export interface MonthlyEarning {
   bookings: number;
 }
 
+export interface Refund {
+  id: string;
+  booking_id: string;
+  booking_reference: string;
+  vehicle_name: string;
+  cancellation_date: string;
+  refund_amount: number;
+  status: "pending" | "initiated" | "processed" | "failed";
+  expected_date: string;
+  created_at: string;
+}
+
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  completed: boolean;
+  required: boolean;
+  completed_at?: string;
+}
+
+export interface KYCDocument {
+  id: string;
+  type: string;
+  status: "pending" | "verified" | "rejected";
+  file_name: string;
+  file_url: string;
+  document_number?: string;
+  expiry_date?: string;
+  rejection_reason?: string;
+  verified_at?: string;
+  uploaded_at: string;
+}
+
+export interface DamageReport {
+  id: string;
+  booking_id: string;
+  reported_by: "customer" | "owner";
+  damage_type: string;
+  description: string;
+  damage_photos: string[];
+  estimated_cost?: number;
+  status: string;
+  resolution_notes?: string;
+  compensation_amount?: number;
+  reported_at: string;
+  resolved_at?: string;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
@@ -143,10 +191,16 @@ function getAuthHeader(): Record<string, string> {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  // Don't set Content-Type for FormData - let browser set it with boundary
+  const headers: Record<string, string> = {};
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...headers,
       ...getAuthHeader(),
       ...options.headers,
     },
@@ -215,8 +269,14 @@ export const api = {
 
     list: () => request<Booking[]>("/bookings"),
 
+    getDetails: (id: string) => request<any>(`/bookings/${id}`),
+
     cancel: (id: string, reason: string) =>
       request<Booking>(`/bookings/${id}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }),
+
+    refunds: () => request<Refund[]>("/bookings/refunds"),
+
+    reminders: () => request<Record<string, unknown>[]>("/bookings/reminders"),
   },
 
   owner: {
@@ -235,6 +295,8 @@ export const api = {
 
     bookings: () => request<Record<string, unknown>[]>("/owner/bookings"),
 
+    bookingDetail: (id: string) => request<any>(`/owner/bookings/${id}`),
+
     earnings: () => request<EarningsSummary>("/owner/earnings"),
 
     monthlyEarnings: () => request<MonthlyEarning[]>("/owner/earnings/monthly"),
@@ -244,6 +306,39 @@ export const api = {
 
     unblockSlot: (slotId: string) =>
       request<void>(`/owner/availability/${slotId}`, { method: "DELETE" }),
+
+    checklist: {
+      get: (bookingId: string, type: "pre_pickup" | "post_return") =>
+        request<{ checklist_type: string; items: ChecklistItem[] }>(`/owner/bookings/${bookingId}/checklists/${type}`),
+
+      update: (bookingId: string, type: "pre_pickup" | "post_return", itemId: string, completed: boolean) =>
+        request<{ checklist_type: string; items: ChecklistItem[] }>(
+          `/owner/bookings/${bookingId}/checklists/${type}/${itemId}`,
+          { method: "POST", body: JSON.stringify({ completed }) }
+        ),
+    },
+  },
+
+  kyc: {
+    documents: () => request<KYCDocument[]>("/kyc/documents"),
+
+    uploadDocument: (data: FormData) =>
+      request("/kyc/documents", { method: "POST", body: data }),
+
+    verifyStatus: () => request<{ verified: boolean; user_id: string; role: string }>("/kyc/verify-status"),
+
+    verifyDocument: (documentId: string, notes?: string) =>
+      request(`/kyc/documents/${documentId}/verify`, { method: "POST", body: JSON.stringify({ notes }) }),
+
+    rejectDocument: (documentId: string, rejectionReason: string) =>
+      request(`/kyc/documents/${documentId}/reject`, { method: "POST", body: JSON.stringify({ rejection_reason: rejectionReason }) }),
+
+    damageReports: {
+      create: (bookingId: string, data: any) =>
+        request("/kyc/damage-reports", { method: "POST", body: JSON.stringify({ ...data, booking_id: bookingId }) }),
+
+      get: (bookingId: string) => request<DamageReport[]>(`/kyc/damage-reports/${bookingId}`),
+    },
   },
 };
 

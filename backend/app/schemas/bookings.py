@@ -50,8 +50,12 @@ class BookingResponse(BaseModel):
     id:               str
     vehicle_id:       str
     customer_id:      str
+    owner_id:         str
     pickup_time:      datetime
     dropoff_time:     datetime
+    pickup_address:   str | None
+    pickup_latitude:  Decimal | None
+    pickup_longitude: Decimal | None
     status:           str
     base_amount:      int
     discount_amount:  int
@@ -60,6 +64,61 @@ class BookingResponse(BaseModel):
     security_deposit: int
     promo_code:       str | None
     created_at:       datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BookingDetailResponse(BaseModel):
+    """Enhanced booking response with vehicle and customer details - for summary and details page."""
+    # Booking details
+    id:                str
+    booking_reference: str  # e.g., "VOY-20260426-001234"
+    status:            str
+
+    # Vehicle details
+    vehicle_id:        str
+    vehicle_name:      str  # e.g., "Maruti Swift LXi"
+    vehicle_make:      str
+    vehicle_model:     str
+    vehicle_year:      int
+    vehicle_color:     str
+    vehicle_image:     str | None
+    registration_number: str | None
+
+    # Owner details
+    owner_id:          str
+    owner_name:        str
+    owner_rating:      float | None
+
+    # Customer details
+    customer_id:       str
+    customer_name:     str
+    customer_phone:    str
+    customer_email:    str | None
+
+    # Pickup/Dropoff
+    pickup_time:       datetime
+    dropoff_time:      datetime
+    pickup_address:    str | None
+    dropoff_address:   str | None
+    pickup_latitude:   Decimal | None
+    pickup_longitude:  Decimal | None
+
+    # Pricing breakdown
+    base_amount:       int      # paise
+    discount_amount:   int      # paise
+    tax_amount:        int      # paise
+    security_deposit:  int      # paise
+    total_amount:      int      # paise
+
+    # Additional info
+    promo_code:        str | None
+    cancel_reason:     str | None
+    cancelled_at:      datetime | None
+
+    # Timestamps
+    created_at:        datetime
+    updated_at:        datetime
 
     model_config = {"from_attributes": True}
 

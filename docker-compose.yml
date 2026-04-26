@@ -1,75 +1,151 @@
+version: '3.8'
+
 services:
-  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  # ── PostgreSQL Database ─────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
+    container_name: voyza-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: voyza
-      POSTGRES_PASSWORD: voyza_dev_pass
-      POSTGRES_DB: voyza_db
+      POSTGRES_USER: ${DB_USER:-voyza}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-voyza_secure_pass}
+      POSTGRES_DB: ${DB_NAME:-voyza_db}
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - voyza-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U voyza -d voyza_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-voyza}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # ── Redis ───────────────────────────────────────────────────────────────────
+  # ── MinIO Object Storage (S3-compatible) ────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: voyza-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin_secure}
+      MINIO_CONSOLE_ADDRESS: ":9001"
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - voyza-network
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ── Redis Cache ─────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
+    container_name: voyza-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - voyza-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
 
-  # ── FastAPI Backend ──────────────────────────────────────────────────────────
+  # ── FastAPI Backend ─────────────────────────────────────────────────────────
   api:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
+    container_name: voyza-api
     restart: unless-stopped
-    env_file:
-      - ./backend/.env
-    environment:
-      - POSTGRES_SERVER=db
-      - DATABASE_URL=postgresql+asyncpg://voyza:voyza_dev_pass@db:5432/voyza_db
-      - REDIS_HOST=redis
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app      # hot-reload in dev
     depends_on:
       db:
         condition: service_healthy
+      minio:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    env_file:
+      - ./backend/.env
+    environment:
+      # Database
+      DATABASE_URL: postgresql+asyncpg://${DB_USER:-voyza}:${DB_PASSWORD:-voyza_secure_pass}@db:5432/${DB_NAME:-voyza_db}
+      POSTGRES_SERVER: db
+
+      # MinIO/S3
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-voyza-documents}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin_secure}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT:-http://minio:9000}
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-change_me_in_production}
+      DEBUG: ${DEBUG:-false}
+
+      # CORS
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,https://voyzacar.online,https://www.voyzacar.online}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    networks:
+      - voyza-network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ── Next.js Frontend ────────────────────────────────────────────────────────
   web:
     build:
       context: ./frontend-web
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+    container_name: voyza-web
     restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
-      - ./frontend-web:/app    # hot-reload in dev
-      - /app/node_modules      # preserve node_modules
+      - ./frontend-web:/app
+      - /app/node_modules
+      - /app/.next
     depends_on:
       - api
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+      NODE_ENV: ${NODE_ENV:-development}
+    networks:
+      - voyza-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   postgres_data:
+  minio_data:
   redis_data:
+
+networks:
+  voyza-network:
+    driver: bridge

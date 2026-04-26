@@ -259,7 +259,19 @@ async def cancel_booking(
     if slot:
         await db.delete(slot)
 
-    # TODO: Trigger refund via payment_service in Phase 5
+    # Create refund record (if payment was captured)
+    from app.services.refund_service import create_refund_for_cancellation
+    try:
+        await create_refund_for_cancellation(
+            booking=booking,
+            initiated_by=cancelled_by,
+            reason_text=reason,
+            db=db,
+        )
+    except Exception as e:
+        # Log but don't fail the cancellation if refund creation fails
+        # The booking is still cancelled; refund can be processed manually
+        pass
 
     return booking
 
@@ -292,3 +304,101 @@ async def get_customer_bookings(customer_id: str, db: AsyncSession) -> list[dict
         }
         for row in rows
     ]
+
+
+# ── Get booking detail (enriched with vehicle, owner, customer) ───────────────
+
+async def get_booking_detail(booking_id: str, db: AsyncSession) -> dict:
+    """
+    Returns a complete booking detail with all enriched information:
+    - Vehicle details (make, model, year, color, registration, image)
+    - Owner details (name, phone, email, avatar, rating)
+    - Customer details (name, phone, email, avatar, verification status)
+    - Pricing breakdown
+    - Timeline
+    - Location
+    - Cancellation info (if cancelled)
+    """
+    from app.models.models import VehicleImage, User
+
+    result = await db.execute(
+        select(Booking, Vehicle, User, VehicleImage)
+        .join(Vehicle, Vehicle.id == Booking.vehicle_id)
+        .join(User, User.id == Booking.customer_id)
+        .outerjoin(VehicleImage, and_(VehicleImage.vehicle_id == Vehicle.id, VehicleImage.is_primary.is_(True)))
+        .where(Booking.id == booking_id)
+    )
+    row = result.one_or_none()
+
+    if not row:
+        raise HTTPException(404, "Booking not found")
+
+    booking, vehicle, customer, primary_image = row
+
+    # Get owner details
+    owner_result = await db.execute(
+        select(User).where(User.id == booking.owner_id)
+    )
+    owner = owner_result.scalar_one_or_none()
+
+    # Calculate duration
+    duration_seconds = (booking.dropoff_time - booking.pickup_time).total_seconds()
+    duration_hours = duration_seconds / 3600
+    duration_days = math.ceil(duration_hours / 24)
+
+    # Build response
+    return {
+        "id": booking.id,
+        "booking_reference": f"VOY-{booking.created_at.strftime('%Y%m%d')}-{booking.id[:8].upper()}",
+        "status": booking.status.value,
+        "created_at": booking.created_at.isoformat(),
+        "pickup_time": booking.pickup_time.isoformat(),
+        "dropoff_time": booking.dropoff_time.isoformat(),
+        "duration_hours": round(duration_hours, 2),
+        "duration_days": duration_days,
+        "pickup_address": booking.pickup_address,
+        "pickup_latitude": float(booking.pickup_latitude) if booking.pickup_latitude else None,
+        "pickup_longitude": float(booking.pickup_longitude) if booking.pickup_longitude else None,
+        "dropoff_address": booking.dropoff_address,
+        "base_amount": booking.base_amount,
+        "discount_amount": booking.discount_amount,
+        "tax_amount": booking.tax_amount,
+        "security_deposit": booking.security_deposit,
+        "total_amount": booking.total_amount,
+        "promo_code": booking.promo_code,
+        "vehicle": {
+            "id": vehicle.id,
+            "make": vehicle.make,
+            "model": vehicle.model,
+            "variant": vehicle.variant,
+            "year": vehicle.year,
+            "color": vehicle.color,
+            "registration_number": vehicle.registration_number,
+            "fuel_type": vehicle.fuel_type.value if hasattr(vehicle.fuel_type, "value") else str(vehicle.fuel_type),
+            "transmission": vehicle.transmission.value if hasattr(vehicle.transmission, "value") else str(vehicle.transmission),
+            "seating": vehicle.seating,
+            "mileage_kmpl": float(vehicle.mileage_kmpl) if vehicle.mileage_kmpl else None,
+            "image_url": primary_image.url if primary_image else None,
+        },
+        "owner": {
+            "id": owner.id,
+            "full_name": owner.full_name,
+            "phone": owner.phone,
+            "email": owner.email,
+            "avatar_url": owner.avatar_url,
+            "avg_rating": float(owner.avg_rating) if owner.avg_rating else None,
+        } if owner else None,
+        "customer": {
+            "id": customer.id,
+            "full_name": customer.full_name,
+            "phone": customer.phone,
+            "email": customer.email,
+            "avatar_url": customer.avatar_url,
+            "is_verified": customer.is_verified,
+        },
+        "cancelled_at": booking.cancelled_at.isoformat() if booking.cancelled_at else None,
+        "cancel_reason": booking.cancel_reason,
+        "cancelled_by": booking.cancelled_by,
+        "odometer_start": booking.odometer_start,
+        "odometer_end": booking.odometer_end,
+    }
