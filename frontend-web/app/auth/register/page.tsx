@@ -28,7 +28,16 @@ function RegisterForm() {
       saveUser(user);
       router.push(role === "owner" ? "/dashboard/owner" : "/dashboard/bookings");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Registration failed");
+      let errorMsg = "Registration failed";
+      if (e instanceof Error) {
+        errorMsg = e.message;
+      } else if (typeof e === "string") {
+        errorMsg = e;
+      } else if (e && typeof e === "object" && "message" in e) {
+        errorMsg = String((e as any).message);
+      }
+      setError(errorMsg);
+      console.error("Registration error:", e);
     } finally { setLoading(false); }
   }
 
