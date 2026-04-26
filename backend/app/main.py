@@ -51,11 +51,14 @@ def create_app() -> FastAPI:
     )
 
     # ── CORS ──────────────────────────────────────────────────────────────────
+    # Convert AnyHttpUrl objects to strings, ensuring proper format
+    cors_origins = [str(o).rstrip('/') for o in settings.BACKEND_CORS_ORIGINS] if settings.BACKEND_CORS_ORIGINS else ["http://localhost:3000", "http://localhost:8000"]
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[str(o) for o in settings.BACKEND_CORS_ORIGINS] or ["*"],
+        allow_origins=cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         allow_headers=["*"],
     )
 
