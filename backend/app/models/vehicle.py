@@ -64,8 +64,14 @@ class Vehicle(Base):
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     color: Mapped[str] = mapped_column(String(40), nullable=False)
     seating: Mapped[int] = mapped_column(Integer, nullable=False)
-    fuel_type: Mapped[FuelType] = mapped_column(Enum(FuelType), nullable=False)
-    transmission: Mapped[Transmission] = mapped_column(Enum(Transmission), nullable=False)
+    fuel_type: Mapped[FuelType] = mapped_column(
+        Enum(FuelType, values_callable=lambda x: [e.value for e in x], name="fueltype"),
+        nullable=False,
+    )
+    transmission: Mapped[Transmission] = mapped_column(
+        Enum(Transmission, values_callable=lambda x: [e.value for e in x], name="transmissiontype"),
+        nullable=False,
+    )
     mileage_kmpl: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
 
     city: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -83,8 +89,16 @@ class Vehicle(Base):
     insurance_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     insurance_expiry: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    status: Mapped[VehicleStatus] = mapped_column(Enum(VehicleStatus), default=VehicleStatus.DRAFT, nullable=False)
-    kyc_status: Mapped[KYCStatus] = mapped_column(Enum(KYCStatus), default=KYCStatus.PENDING, nullable=False)
+    status: Mapped[VehicleStatus] = mapped_column(
+        Enum(VehicleStatus, values_callable=lambda x: [e.value for e in x], name="vehiclestatus"),
+        default=VehicleStatus.DRAFT,
+        nullable=False,
+    )
+    kyc_status: Mapped[KYCStatus] = mapped_column(
+        Enum(KYCStatus, values_callable=lambda x: [e.value for e in x], name="kycstatus"),
+        default=KYCStatus.PENDING,
+        nullable=False,
+    )
     kyc_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     features: Mapped[dict] = mapped_column(JSONB, default=dict)

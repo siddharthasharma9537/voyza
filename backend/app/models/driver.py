@@ -56,7 +56,10 @@ class Driver(Base):
 
     # License
     license_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
-    license_class: Mapped[LicenseClass] = mapped_column(Enum(LicenseClass), nullable=False)
+    license_class: Mapped[LicenseClass] = mapped_column(
+        Enum(LicenseClass, values_callable=lambda x: [e.value for e in x], name="licenseclass"),
+        nullable=False,
+    )
     license_expiry: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     license_doc_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
@@ -69,7 +72,7 @@ class Driver(Base):
 
     # Operational
     status: Mapped[DriverStatus] = mapped_column(
-        Enum(DriverStatus),
+        Enum(DriverStatus, values_callable=lambda x: [e.value for e in x], name="driverstatus"),
         default=DriverStatus.OFFLINE,
         nullable=False,
     )
