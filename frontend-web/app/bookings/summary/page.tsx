@@ -4,7 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { PickupLocationMap } from "@/components/PickupLocationMap";
+
+export const dynamic = "force-dynamic";
 
 interface BookingSummary {
   id: string;
@@ -127,14 +128,6 @@ export default function BookingSummaryPage() {
           </div>
         </div>
 
-        {/* Pickup Location Map */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
-          <h3 className="text-lg font-bold text-slate-900 mb-4">🗺️ Pickup Location</h3>
-          <PickupLocationMap
-            address={booking.pickup_address}
-            vehicleName={booking.vehicle_name}
-          />
-        </div>
 
         {/* Pickup & Dropoff */}
         <div className="grid grid-cols-2 gap-4 mb-6">
