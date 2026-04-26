@@ -3,7 +3,6 @@
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import { PickupLocationMap } from "@/components/PickupLocationMap";
 
 interface BookingDetail {
   id: string;
@@ -199,18 +198,6 @@ export default function ManageBookingPage() {
           </div>
         </div>
 
-        {/* Pickup Location Map */}
-        {isUpcoming && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
-            <h2 className="text-lg font-bold text-slate-900 mb-4">🗺️ Pickup Location</h2>
-            <PickupLocationMap
-              latitude={booking.pickup_latitude || "0"}
-              longitude={booking.pickup_longitude || "0"}
-              address={booking.pickup_address}
-              vehicleName={booking.vehicle_name}
-            />
-          </div>
-        )}
 
         {/* Pickup & Dropoff */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
