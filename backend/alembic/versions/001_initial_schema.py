@@ -79,7 +79,7 @@ def upgrade() -> None:
         sa.Column("color",               sa.String(40),  nullable=False),
         sa.Column("seating",             sa.Integer,     nullable=False),
         sa.Column("fuel_type",           sa.Enum("petrol","diesel","electric","hybrid","cng", name="fueltype"), nullable=False),
-        sa.Column("transmission",        sa.Enum("manual","automatic", name="transmission"), nullable=False),
+        sa.Column("transmission",        sa.Enum("manual","automatic", name="transmissiontype"), nullable=False),
         sa.Column("mileage_kmpl",        sa.Numeric(5,2), nullable=True),
         sa.Column("city",                sa.String(100), nullable=False),
         sa.Column("state",               sa.String(100), nullable=False),
@@ -93,16 +93,16 @@ def upgrade() -> None:
         sa.Column("rc_document_url",     sa.String(500), nullable=True),
         sa.Column("insurance_url",       sa.String(500), nullable=True),
         sa.Column("insurance_expiry",    sa.DateTime(timezone=True), nullable=True),
-        sa.Column("status",              sa.Enum("draft","pending","active","suspended", name="carstatus"), nullable=False, server_default="draft"),
+        sa.Column("status",              sa.Enum("draft","pending","active","suspended", name="vehiclestatus"), nullable=False, server_default="draft"),
         sa.Column("kyc_status",          sa.Enum("pending","approved","rejected", name="kycstatus"), nullable=False, server_default="pending"),
         sa.Column("kyc_notes",           sa.Text, nullable=True),
         sa.Column("features",            postgresql.JSONB, nullable=False, server_default="{}"),
         sa.Column("deleted_at",          sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at",          sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at",          sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.CheckConstraint("price_per_hour > 0",        name="ck_vehicles_price_per_hour_positive"),
-        sa.CheckConstraint("price_per_day > 0",         name="ck_vehicles_price_per_day_positive"),
-        sa.CheckConstraint("year >= 2000 AND year <= 2030", name="ck_vehicles_year_range"),
+        sa.CheckConstraint("price_per_hour > 0",        name="ck_vehicle_price_per_hour_positive"),
+        sa.CheckConstraint("price_per_day > 0",         name="ck_vehicle_price_per_day_positive"),
+        sa.CheckConstraint("year >= 2000 AND year <= 2030", name="ck_vehicle_year_range"),
     )
     op.create_index("ix_vehicles_owner_id",           "vehicles", ["owner_id"])
     op.create_index("ix_vehicles_city_status",        "vehicles", ["city", "status"])
@@ -220,5 +220,5 @@ def downgrade() -> None:
     op.drop_table("otp_codes")
     op.drop_table("refresh_tokens")
     op.drop_table("users")
-    for enum in ["userrole","fueltype","transmission","carstatus","kycstatus","bookingstatus","paymentgateway","paymentstatus"]:
+    for enum in ["userrole","fueltype","transmissiontype","vehiclestatus","kycstatus","bookingstatus","paymentgateway","paymentstatus"]:
         op.execute(f"DROP TYPE IF EXISTS {enum}")
