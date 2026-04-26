@@ -1,0 +1,50 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.gitignore
+
+# Frontend files (not needed for backend)
+frontend-web/
+nginx/
+
+# Documentation
+*.md
+PHASE*.md
+DEPLOYMENT_GUIDE.md
+LIVE_DEPLOYMENT_README.md
+FILES_CREATED_SUMMARY.md
+TIME_PICKER*
+
+# Docker
+docker-compose*.yml
+Dockerfile.dev
+
+# Testing/Development
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+.env.local
+
+# Build files
+dist/
+build/
+*.egg-info/
