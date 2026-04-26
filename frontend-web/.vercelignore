@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Next.js
+.next/
+out/
+
+# Production
+build/
+dist/
+
+# Misc
+.DS_Store
+*.log
+*.md
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Backend files (not needed for frontend)
+backend/
+docker-compose*
+nginx/
+.claude/
+Dockerfile
+deploy.sh
+DEPLOYMENT_GUIDE.md
+LIVE_DEPLOYMENT_README.md
+PHASE*
+FILES_CREATED_SUMMARY.md
