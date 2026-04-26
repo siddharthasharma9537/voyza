@@ -67,9 +67,9 @@ def upgrade() -> None:
     )
     op.create_index("ix_otp_phone_expires", "otp_codes", ["phone", "expires_at"])
 
-    # ── cars ──────────────────────────────────────────────────────────────────
+    # ── vehicles ──────────────────────────────────────────────────────────────
     op.create_table(
-        "cars",
+        "vehicles",
         sa.Column("id",                  postgresql.UUID(as_uuid=False), primary_key=True),
         sa.Column("owner_id",            postgresql.UUID(as_uuid=False), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("make",                sa.String(80),  nullable=False),
@@ -100,33 +100,33 @@ def upgrade() -> None:
         sa.Column("deleted_at",          sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at",          sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at",          sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.CheckConstraint("price_per_hour > 0",        name="ck_cars_price_per_hour_positive"),
-        sa.CheckConstraint("price_per_day > 0",         name="ck_cars_price_per_day_positive"),
-        sa.CheckConstraint("year >= 2000 AND year <= 2030", name="ck_cars_year_range"),
+        sa.CheckConstraint("price_per_hour > 0",        name="ck_vehicles_price_per_hour_positive"),
+        sa.CheckConstraint("price_per_day > 0",         name="ck_vehicles_price_per_day_positive"),
+        sa.CheckConstraint("year >= 2000 AND year <= 2030", name="ck_vehicles_year_range"),
     )
-    op.create_index("ix_cars_owner_id",           "cars", ["owner_id"])
-    op.create_index("ix_cars_city_status",        "cars", ["city", "status"])
-    op.create_index("ix_cars_fuel_transmission",  "cars", ["fuel_type", "transmission"])
+    op.create_index("ix_vehicles_owner_id",           "vehicles", ["owner_id"])
+    op.create_index("ix_vehicles_city_status",        "vehicles", ["city", "status"])
+    op.create_index("ix_vehicles_fuel_transmission",  "vehicles", ["fuel_type", "transmission"])
 
-    # ── car_images ────────────────────────────────────────────────────────────
+    # ── vehicle_images ────────────────────────────────────────────────────────
     op.create_table(
-        "car_images",
+        "vehicle_images",
         sa.Column("id",         postgresql.UUID(as_uuid=False), primary_key=True),
-        sa.Column("car_id",     postgresql.UUID(as_uuid=False), sa.ForeignKey("cars.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("vehicle_id", postgresql.UUID(as_uuid=False), sa.ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False),
         sa.Column("url",        sa.String(500), nullable=False),
         sa.Column("is_primary", sa.Boolean, nullable=False, server_default="false"),
         sa.Column("sort_order", sa.Integer, nullable=False, server_default="0"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
-    op.create_index("ix_car_images_car_id", "car_images", ["car_id"])
+    op.create_index("ix_vehicle_images_vehicle_id", "vehicle_images", ["vehicle_id"])
 
     # ── bookings ──────────────────────────────────────────────────────────────
     op.create_table(
         "bookings",
         sa.Column("id",               postgresql.UUID(as_uuid=False), primary_key=True),
         sa.Column("customer_id",      postgresql.UUID(as_uuid=False), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("car_id",           postgresql.UUID(as_uuid=False), sa.ForeignKey("cars.id"),  nullable=False),
+        sa.Column("vehicle_id",       postgresql.UUID(as_uuid=False), sa.ForeignKey("vehicles.id"),  nullable=False),
         sa.Column("owner_id",         postgresql.UUID(as_uuid=False), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("pickup_time",      sa.DateTime(timezone=True), nullable=False),
         sa.Column("dropoff_time",     sa.DateTime(timezone=True), nullable=False),
@@ -151,16 +151,16 @@ def upgrade() -> None:
         sa.CheckConstraint("total_amount >= 0",          name="ck_bookings_total_positive"),
     )
     op.create_index("ix_bookings_customer_id",    "bookings", ["customer_id"])
-    op.create_index("ix_bookings_car_id",         "bookings", ["car_id"])
+    op.create_index("ix_bookings_vehicle_id",     "bookings", ["vehicle_id"])
     op.create_index("ix_bookings_owner_id",       "bookings", ["owner_id"])
     op.create_index("ix_bookings_status",         "bookings", ["status"])
-    op.create_index("ix_bookings_pickup_dropoff", "bookings", ["car_id","pickup_time","dropoff_time"])
+    op.create_index("ix_bookings_pickup_dropoff", "bookings", ["vehicle_id","pickup_time","dropoff_time"])
 
     # ── availability ──────────────────────────────────────────────────────────
     op.create_table(
         "availability",
         sa.Column("id",         postgresql.UUID(as_uuid=False), primary_key=True),
-        sa.Column("car_id",     postgresql.UUID(as_uuid=False), sa.ForeignKey("cars.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("vehicle_id", postgresql.UUID(as_uuid=False), sa.ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False),
         sa.Column("start_time", sa.DateTime(timezone=True), nullable=False),
         sa.Column("end_time",   sa.DateTime(timezone=True), nullable=False),
         sa.Column("reason",     sa.String(30), nullable=False, server_default="blocked"),
@@ -169,7 +169,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint("end_time > start_time", name="ck_availability_time_order"),
     )
-    op.create_index("ix_availability_car_time", "availability", ["car_id","start_time","end_time"])
+    op.create_index("ix_availability_vehicle_time", "availability", ["vehicle_id","start_time","end_time"])
 
     # ── payments ──────────────────────────────────────────────────────────────
     op.create_table(
@@ -199,7 +199,7 @@ def upgrade() -> None:
         sa.Column("id",          postgresql.UUID(as_uuid=False), primary_key=True),
         sa.Column("booking_id",  postgresql.UUID(as_uuid=False), sa.ForeignKey("bookings.id"), unique=True, nullable=False),
         sa.Column("reviewer_id", postgresql.UUID(as_uuid=False), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("car_id",      postgresql.UUID(as_uuid=False), sa.ForeignKey("cars.id"), nullable=False),
+        sa.Column("vehicle_id",  postgresql.UUID(as_uuid=False), sa.ForeignKey("vehicles.id"), nullable=False),
         sa.Column("rating",      sa.Integer, nullable=False),
         sa.Column("comment",     sa.Text, nullable=True),
         sa.Column("owner_reply", sa.Text, nullable=True),
@@ -207,7 +207,7 @@ def upgrade() -> None:
         sa.Column("updated_at",  sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint("rating >= 1 AND rating <= 5", name="ck_reviews_rating_range"),
     )
-    op.create_index("ix_reviews_car_id", "reviews", ["car_id"])
+    op.create_index("ix_reviews_vehicle_id", "reviews", ["vehicle_id"])
 
 
 def downgrade() -> None:
@@ -215,8 +215,8 @@ def downgrade() -> None:
     op.drop_table("payments")
     op.drop_table("availability")
     op.drop_table("bookings")
-    op.drop_table("car_images")
-    op.drop_table("cars")
+    op.drop_table("vehicle_images")
+    op.drop_table("vehicles")
     op.drop_table("otp_codes")
     op.drop_table("refresh_tokens")
     op.drop_table("users")
