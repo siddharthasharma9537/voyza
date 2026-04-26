@@ -69,17 +69,17 @@ class Settings(BaseSettings):
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
 
     # ── Storage ──────────────────────────────────────────────────────────────
-    S3_BUCKET_NAME: str
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
+    S3_BUCKET_NAME: str = ""
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
     S3_ENDPOINT_URL: str | None = None
     S3_REGION: str = "ap-south-1"
 
 
     # ── Payments ─────────────────────────────────────────────────────────────
-    RAZORPAY_KEY_ID: str
-    RAZORPAY_KEY_SECRET: str
-    RAZORPAY_WEBHOOK_SECRET: str
+    RAZORPAY_KEY_ID: str = ""
+    RAZORPAY_KEY_SECRET: str = ""
+    RAZORPAY_WEBHOOK_SECRET: str = ""
 
     # ── OTP / SMS (Twilio) ───────────────────────────────────────────────────
     TWILIO_ACCOUNT_SID: str = ""
