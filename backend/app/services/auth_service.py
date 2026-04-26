@@ -155,6 +155,20 @@ async def login_with_password(phone: str, password: str, db: AsyncSession) -> To
     return await _issue_tokens(user, db)
 
 
+async def login_with_email_and_password(email: str, password: str, db: AsyncSession) -> TokenResponse:
+    """Login using email and password."""
+    result = await db.execute(select(User).where(User.email == email, User.deleted_at.is_(None)))
+    user = result.scalar_one_or_none()
+
+    if not user or not user.hashed_password or not verify_password(password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account suspended")
+
+    return await _issue_tokens(user, db)
+
+
 async def login_with_otp(phone: str, db: AsyncSession) -> TokenResponse:
     """Called after OTP has already been verified."""
     result = await db.execute(select(User).where(User.phone == phone, User.deleted_at.is_(None)))
@@ -207,3 +221,88 @@ async def refresh_access_token(raw_refresh_token: str, db: AsyncSession) -> Toke
         raise HTTPException(status_code=401, detail="User inactive")
 
     return await _issue_tokens(user, db)
+
+
+# ── Phone Registration ─────────────────────────────────────────────────────────
+
+async def register_with_phone(
+    phone: str,
+    full_name: str,
+    email: str,
+    role: str,
+    db: AsyncSession,
+) -> User:
+    """
+    Create user account after phone OTP verification.
+    Phone is pre-verified, email can be verified later.
+    """
+    # Check phone uniqueness
+    existing_phone = await db.execute(select(User).where(User.phone == phone))
+    if existing_phone.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Phone number already registered")
+
+    # Check email uniqueness if provided
+    if email:
+        existing_email = await db.execute(select(User).where(User.email == email))
+        if existing_email.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Email already registered")
+
+    user = User(
+        full_name=full_name,
+        phone=phone,
+        email=email,
+        role=UserRole(role),
+        is_active=True,
+        is_verified=True,  # Phone verified
+        email_verified=False,  # Email not yet verified
+        oauth_provider="phone",
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+async def verify_email_otp_for_user(
+    email: str,
+    otp: str,
+    db: AsyncSession,
+) -> User:
+    """
+    Verify email OTP and mark email as verified.
+    Called after account creation.
+    """
+    # Verify OTP
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(OTPCode)
+        .where(
+            OTPCode.phone == email,  # Store email OTP with phone column for now
+            OTPCode.purpose == "email_verification",
+            OTPCode.is_used.is_(False),
+            OTPCode.expires_at > now,
+        )
+        .order_by(OTPCode.created_at.desc())
+        .limit(1)
+    )
+    record = result.scalar_one_or_none()
+
+    if not record or not verify_otp(otp, record.code_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OTP",
+        )
+
+    record.is_used = True
+
+    # Find user by email and mark verified
+    user_result = await db.execute(select(User).where(User.email == email))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    user.email_verified = True
+    await db.flush()
+    return user

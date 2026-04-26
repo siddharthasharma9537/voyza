@@ -25,6 +25,13 @@ class User(Base):
     phone: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # ── OAuth Integration ─────────────────────────────────────────────────────
+    google_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    apple_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    facebook_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    oauth_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)  # google, apple, facebook, phone
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     role: Mapped[UserRole] = mapped_column(
         SAEnum(
             UserRole,
@@ -35,7 +42,7 @@ class User(Base):
         nullable=False,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # phone_verified
 
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     date_of_birth: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -78,6 +85,9 @@ class User(Base):
         Index("ix_users_phone", "phone"),
         Index("ix_users_email", "email"),
         Index("ix_users_role", "role"),
+        Index("ix_users_google_id", "google_id"),
+        Index("ix_users_apple_id", "apple_id"),
+        Index("ix_users_facebook_id", "facebook_id"),
     )
 
 

@@ -97,6 +97,24 @@ class Settings(BaseSettings):
     # ── Rate Limiting ─────────────────────────────────────────────────────────
     RATE_LIMIT_PER_MINUTE: int = 60
 
+    # ── OAuth Configuration ──────────────────────────────────────────────────
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/oauth/google/callback"
+
+    APPLE_CLIENT_ID: str = ""
+    APPLE_TEAM_ID: str = ""
+    APPLE_KEY_ID: str = ""
+    APPLE_PRIVATE_KEY: str = ""
+    APPLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/oauth/apple/callback"
+
+    FACEBOOK_APP_ID: str = ""
+    FACEBOOK_APP_SECRET: str = ""
+    FACEBOOK_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/oauth/facebook/callback"
+
+    # ── Backend URL for OAuth Callbacks ──────────────────────────────────────
+    BACKEND_URL: str = "http://localhost:8000"
+
 
 @lru_cache
 def get_settings() -> Settings:
