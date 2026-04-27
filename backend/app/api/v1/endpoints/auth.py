@@ -18,6 +18,7 @@ from app.core.dependencies import get_current_user
 from app.db.base import get_db
 from app.models.models import User
 from app.services.email_service import send_otp_email
+from app.services.sms_service import send_otp_sms
 from app.schemas.auth import (
     EmailVerificationStartRequest,
     EmailVerificationVerifyRequest,
@@ -49,7 +50,7 @@ async def register_send_phone_otp(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Start phone-based registration: send OTP to phone.
+    Start phone-based registration: send OTP to phone via SMS.
     User must verify OTP before account creation.
     """
     raw_otp = await auth_service.send_otp(
@@ -58,10 +59,15 @@ async def register_send_phone_otp(
         db=db,
     )
 
+    # Send SMS via Twilio
+    sms_sent = await send_otp_sms(body.phone, raw_otp, purpose="registration")
+
     from app.core.config import settings
     response = {"message": "OTP sent successfully to phone"}
     if settings.DEBUG:
         response["otp"] = raw_otp
+        response["sms_sent"] = sms_sent
+    await db.commit()
     return response
 
 
@@ -152,6 +158,7 @@ async def send_otp(
     """
     Send a 6-digit OTP to the given phone number.
     Rate-limited via middleware (60 req/min per IP).
+    Uses Twilio for SMS, with email fallback if configured.
     """
     raw_otp = await auth_service.send_otp(
         phone=body.phone,
@@ -159,13 +166,14 @@ async def send_otp(
         db=db,
     )
 
-    # TODO: Dispatch SMS via Twilio / AWS SNS
-    # In dev mode, return OTP in response for testing
-    # For now, if user has email, also send OTP via email as fallback
+    # Send SMS via Twilio
     from app.core.config import settings
     from sqlalchemy import select
     from app.models.models import User
 
+    sms_sent = await send_otp_sms(body.phone, raw_otp, purpose="login")
+
+    # Also send email if user has email on file (fallback)
     user_result = await db.execute(select(User).where(User.phone == body.phone))
     user = user_result.scalar_one_or_none()
     if user and user.email:
@@ -173,7 +181,8 @@ async def send_otp(
 
     response = {"message": "OTP sent successfully"}
     if settings.DEBUG:
-        response["otp"] = raw_otp   # NEVER in production
+        response["otp"] = raw_otp
+        response["sms_sent"] = sms_sent
     await db.commit()
     return response
 
