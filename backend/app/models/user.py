@@ -78,6 +78,7 @@ class User(Base):
         "KYCDocument",
         back_populates="user",
         cascade="all, delete-orphan",
+        foreign_keys="[KYCDocument.user_id]",
     )
     driver_profile: "Driver" = relationship("Driver", back_populates="user", uselist=False)
 
