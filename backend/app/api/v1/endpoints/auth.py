@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user
 from app.db.base import get_db
 from app.models.models import User
+from app.services.email_service import send_otp_email
 from app.schemas.auth import (
     EmailVerificationStartRequest,
     EmailVerificationVerifyRequest,
@@ -103,17 +104,22 @@ async def register_send_email_otp(
     Send email verification OTP.
     This is optional and can be done after registration.
     """
-    # For now, store email OTP in otp_codes table with email as the "phone"
+    # Store email OTP in otp_codes table with email as the "phone"
     raw_otp = await auth_service.send_otp(
         phone=body.email,  # Use email as phone for lookup
         purpose="email_verification",
         db=db,
     )
 
+    # Send email with OTP
     from app.core.config import settings
+    email_sent = await send_otp_email(body.email, raw_otp, purpose="email_verification")
+
     response = {"message": "OTP sent successfully to email"}
     if settings.DEBUG:
         response["otp"] = raw_otp
+        response["email_sent"] = email_sent
+    await db.commit()
     return response
 
 
@@ -155,10 +161,20 @@ async def send_otp(
 
     # TODO: Dispatch SMS via Twilio / AWS SNS
     # In dev mode, return OTP in response for testing
+    # For now, if user has email, also send OTP via email as fallback
     from app.core.config import settings
+    from sqlalchemy import select
+    from app.models.models import User
+
+    user_result = await db.execute(select(User).where(User.phone == body.phone))
+    user = user_result.scalar_one_or_none()
+    if user and user.email:
+        await send_otp_email(user.email, raw_otp, purpose="login")
+
     response = {"message": "OTP sent successfully"}
     if settings.DEBUG:
         response["otp"] = raw_otp   # NEVER in production
+    await db.commit()
     return response
 
 
