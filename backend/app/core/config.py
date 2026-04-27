@@ -93,6 +93,8 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     EMAILS_FROM_EMAIL: str = ""
+    SENDGRID_API_KEY: str = ""
+    EMAILS_FROM_NAME: str = "Voyza"
 
     # ── Rate Limiting ─────────────────────────────────────────────────────────
     RATE_LIMIT_PER_MINUTE: int = 60

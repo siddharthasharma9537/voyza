@@ -229,7 +229,7 @@ function buildQuery(params: Record<string, unknown>): string {
 
 export const api = {
   auth: {
-    register: (data: { full_name: string; phone: string; password: string; role?: string }) =>
+    register: (data: { full_name: string; phone: string; password: string; email?: string; role?: string }) =>
       request<User>("/auth/register", { method: "POST", body: JSON.stringify(data) }),
 
     login: (phone: string, password: string): Promise<TokenResponse> =>
