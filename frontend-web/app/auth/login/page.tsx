@@ -67,10 +67,13 @@ export default function LoginPage() {
         <div className="space-y-3">
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1">Phone (10 digits)</label>
-            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-              placeholder="9876543210"
-              maxLength={10}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+            <div className="flex gap-1 items-center">
+              <span className="text-slate-500 px-3 py-2.5 text-sm font-medium">+91</span>
+              <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="9876543210"
+                maxLength={10}
+                className="flex-1 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
+            </div>
           </div>
 
           {mode === "password" && (
