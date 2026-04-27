@@ -143,11 +143,9 @@ def create_app() -> FastAPI:
         return {"status": "ok", "version": settings.APP_VERSION}
 
     # ── Startup event: Run database migrations ────────────────────────────────
-    # Temporarily disabled - app will start without database
-    # To run migrations: railway exec alembic upgrade head
-    # @app.on_event("startup")
-    # async def startup_event():
-    #     run_migrations()
+    @app.on_event("startup")
+    async def startup_event():
+        run_migrations()
 
     return app
 
