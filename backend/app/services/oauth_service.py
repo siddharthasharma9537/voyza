@@ -2,29 +2,67 @@
 app/services/oauth_service.py
 ──────────────────────────────
 OAuth token exchange and account linking logic.
-Handles Google, Apple, and Facebook OAuth flows.
+Handles Google, Apple, and Facebook OAuth flows with proper JWT verification.
 """
 
 import json
 from typing import Optional
+from functools import lru_cache
 
 import requests
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from jwt import decode as jwt_decode, PyJWTError
 
 from app.core.config import settings
 from app.core.security import hash_password
 from app.models.models import User, UserRole
 
 
+# ── JWKS Caching (for Google public keys) ─────────────────────────────────────
+
+@lru_cache(maxsize=1)
+def _get_google_jwks() -> dict:
+    """Fetch and cache Google's JWKS (public keys) for verifying ID tokens."""
+    try:
+        response = requests.get(
+            "https://www.googleapis.com/oauth2/v3/certs",
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch Google JWKS: {str(e)}",
+        )
+
+
+def _get_google_key(kid: str) -> Optional[dict]:
+    """Get a specific public key from Google's JWKS by key ID."""
+    try:
+        jwks = _get_google_jwks()
+        for key in jwks.get("keys", []):
+            if key.get("kid") == kid:
+                return key
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to parse Google keys: {str(e)}",
+        )
+
+
 # ── Google OAuth ──────────────────────────────────────────────────────────────
 
 async def exchange_google_code(code: str, redirect_uri: str) -> dict:
     """
-    Exchange Google authorization code for ID token.
+    Exchange Google authorization code for ID token and verify signature.
     Returns decoded ID token with email, name, google_id.
-    Raises HTTPException if code is invalid.
+    Raises HTTPException if code is invalid or signature verification fails.
     """
     token_url = "https://oauth2.googleapis.com/token"
 
@@ -44,29 +82,53 @@ async def exchange_google_code(code: str, redirect_uri: str) -> dict:
         if "id_token" not in token_data:
             raise ValueError("Missing id_token in response")
 
-        # Decode ID token (without verification for now — in production, verify signature)
         id_token = token_data["id_token"]
-        # Split JWT and decode payload (middle part)
-        parts = id_token.split(".")
-        if len(parts) != 3:
-            raise ValueError("Invalid JWT format")
 
-        import base64
-        # Add padding if needed
-        payload_part = parts[1]
-        padding = 4 - (len(payload_part) % 4)
-        if padding != 4:
-            payload_part += "=" * padding
+        # Verify JWT signature using Google's public keys
+        try:
+            # Get the key ID from JWT header
+            header_part = id_token.split(".")[0]
+            import base64
+            padding = 4 - (len(header_part) % 4)
+            if padding != 4:
+                header_part += "=" * padding
+            header = json.loads(base64.urlsafe_b64decode(header_part))
+            kid = header.get("kid")
 
-        decoded = base64.urlsafe_b64decode(payload_part)
-        id_token_data = json.loads(decoded)
+            if not kid:
+                raise ValueError("Missing 'kid' in JWT header")
 
-        return {
-            "provider": "google",
-            "provider_id": id_token_data.get("sub"),  # Google's unique user ID
-            "email": id_token_data.get("email"),
-            "name": id_token_data.get("name"),
-        }
+            # Get the public key
+            google_key = _get_google_key(kid)
+            if not google_key:
+                raise ValueError(f"Could not find key with ID: {kid}")
+
+            # Convert JWK to PEM format for verification
+            from jwt.algorithms import RSAAlgorithm
+            public_key = RSAAlgorithm.from_jwk(json.dumps(google_key))
+
+            # Verify the token signature
+            id_token_data = jwt_decode(
+                id_token,
+                public_key,
+                algorithms=["RS256"],
+                audience=settings.GOOGLE_CLIENT_ID,
+                options={"verify_signature": True}
+            )
+
+            # Additional validation
+            if not id_token_data.get("email_verified"):
+                raise ValueError("Email not verified by Google")
+
+            return {
+                "provider": "google",
+                "provider_id": id_token_data.get("sub"),
+                "email": id_token_data.get("email"),
+                "name": id_token_data.get("name"),
+            }
+
+        except PyJWTError as e:
+            raise ValueError(f"JWT verification failed: {str(e)}")
 
     except requests.RequestException as e:
         raise HTTPException(
@@ -84,16 +146,23 @@ async def exchange_google_code(code: str, redirect_uri: str) -> dict:
 
 async def exchange_apple_code(code: str) -> dict:
     """
-    Exchange Apple authorization code for access token.
+    Exchange Apple authorization code for ID token and verify signature.
     Returns decoded user data with email, apple_id.
-    Raises HTTPException if code is invalid.
+    Raises HTTPException if code is invalid or signature verification fails.
     """
+    from datetime import datetime, timedelta, timezone
+    import jwt as pyjwt
+
     token_url = "https://appleid.apple.com/auth/token"
 
-    # For Apple, we need to generate a client secret (JWT) using the private key
-    import jwt
-    from datetime import datetime, timedelta, timezone
+    # Validate Apple configuration
+    if not settings.APPLE_PRIVATE_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Apple OAuth not configured: missing APPLE_PRIVATE_KEY",
+        )
 
+    # Generate client secret (JWT) using the private key
     now = datetime.now(timezone.utc)
     client_secret_payload = {
         "iss": settings.APPLE_TEAM_ID,
@@ -104,7 +173,7 @@ async def exchange_apple_code(code: str) -> dict:
     }
 
     try:
-        client_secret = jwt.encode(
+        client_secret = pyjwt.encode(
             client_secret_payload,
             settings.APPLE_PRIVATE_KEY,
             algorithm="ES256",
@@ -131,24 +200,56 @@ async def exchange_apple_code(code: str) -> dict:
         if "id_token" not in token_data:
             raise ValueError("Missing id_token in response")
 
-        # Decode ID token
         id_token = token_data["id_token"]
-        parts = id_token.split(".")
-        if len(parts) != 3:
-            raise ValueError("Invalid JWT format")
 
+        # Fetch Apple's public keys for verification
+        jwks_response = requests.get(
+            "https://appleid.apple.com/auth/keys",
+            timeout=10,
+        )
+        jwks_response.raise_for_status()
+        apple_jwks = jwks_response.json()
+
+        # Get the key ID from JWT header
+        header_part = id_token.split(".")[0]
         import base64
-        payload_part = parts[1]
-        padding = 4 - (len(payload_part) % 4)
+        padding = 4 - (len(header_part) % 4)
         if padding != 4:
-            payload_part += "=" * padding
+            header_part += "=" * padding
+        header = json.loads(base64.urlsafe_b64decode(header_part))
+        kid = header.get("kid")
 
-        decoded = base64.urlsafe_b64decode(payload_part)
-        id_token_data = json.loads(decoded)
+        if not kid:
+            raise ValueError("Missing 'kid' in JWT header")
+
+        # Find the matching public key
+        apple_key = None
+        for key in apple_jwks.get("keys", []):
+            if key.get("kid") == kid:
+                apple_key = key
+                break
+
+        if not apple_key:
+            raise ValueError(f"Could not find Apple key with ID: {kid}")
+
+        # Convert JWK to PEM format and verify signature
+        from jwt.algorithms import RSAAlgorithm
+        public_key = RSAAlgorithm.from_jwk(json.dumps(apple_key))
+
+        try:
+            id_token_data = jwt_decode(
+                id_token,
+                public_key,
+                algorithms=["RS256"],
+                audience=settings.APPLE_CLIENT_ID,
+                options={"verify_signature": True}
+            )
+        except PyJWTError as e:
+            raise ValueError(f"JWT verification failed: {str(e)}")
 
         return {
             "provider": "apple",
-            "provider_id": id_token_data.get("sub"),  # Apple's unique user ID
+            "provider_id": id_token_data.get("sub"),
             "email": id_token_data.get("email"),
         }
 

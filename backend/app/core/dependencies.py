@@ -64,6 +64,22 @@ async def get_current_user(
     return user
 
 
+async def get_phone_verified_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Ensures the current user has verified their phone number.
+    Required for most user-facing endpoints (bookings, profiles, etc).
+    OAuth users must link their phone before accessing these.
+    """
+    if not current_user.is_verified or not current_user.phone:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Phone verification required. Please complete OAuth phone linking or use phone-based registration.",
+        )
+    return current_user
+
+
 def require_role(*roles: UserRole):
     """
     Factory that returns a dependency requiring specific roles.
