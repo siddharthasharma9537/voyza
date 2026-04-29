@@ -143,7 +143,7 @@ class TestRefundCalculationEdgeCases:
             return None  # no refund
         if payment_amount:
             amount = min(amount, payment_amount)
-        return amount
+        return max(0, amount)  # Ensure non-negative refund
 
     def test_exactly_24h_boundary(self):
         """Boundary: exactly 24h → full refund."""
