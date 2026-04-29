@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Voyza Knowledge Graph</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        #graph { width: 100vw; height: 100vh; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); }
+        .info { position: absolute; top: 20px; left: 20px; background: white; padding: 20px; 
+                border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 400px; }
+        .title { font-size: 20px; font-weight: bold; margin-bottom: 10px; }
+        .subtitle { font-size: 14px; color: #666; }
+        .legend { position: absolute; bottom: 20px; left: 20px; background: white; padding: 15px;
+                 border-radius: 8px; font-size: 12px; }
+        .legend-item { margin: 5px 0; }
+        .legend-color { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border-radius: 50%; }
+        circle { stroke: #fff; stroke-width: 2px; }
+        .code { fill: #e74c3c; }
+        .document { fill: #3498db; }
+        line { stroke: #bbb; stroke-width: 2px; }
+        text { font-size: 12px; pointer-events: none; }
+        .node-label { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="graph"></div>
+    <div class="info">
+        <div class="title">🧠 Voyza Knowledge Graph</div>
+        <div class="subtitle">24 nodes · 10 edges · 2 communities</div>
+        <div style="margin-top: 15px; font-size: 12px; color: #666;">
+            <strong>God Nodes:</strong> OTP, OAuth Creation, Phone Linking
+        </div>
+    </div>
+    <div class="legend">
+        <div class="title" style="margin-bottom: 10px;">Legend</div>
+        <div class="legend-item"><span class="legend-color code"></span> Code Files</div>
+        <div class="legend-item"><span class="legend-color document"></span> Documentation</div>
+    </div>
+    
+    <script>
+        const graphData = {"nodes": [{"id": "backend_app_services_auth_service_py", "label": "Authentication Service", "title": "backend/app/services/auth_service.py", "community": "1", "type": "code"}, {"id": "backend_app_services_oauth_service_py", "label": "OAuth Service", "title": "backend/app/services/oauth_service.py", "community": "1", "type": "code"}, {"id": "backend_app_api_v1_endpoints_auth_py", "label": "Auth Endpoints", "title": "backend/app/api/v1/endpoints/auth.py", "community": "1", "type": "code"}, {"id": "backend_app_models_models_py", "label": "Database Models", "title": "backend/app/models/models.py", "community": "1", "type": "code"}, {"id": "backend_app_core_security_py", "label": "Security Utils", "title": "backend/app/core/security.py", "community": "1", "type": "code"}, {"id": "auth_service_send_otp", "label": "OTP Generation", "title": "backend/app/services/auth_service.py", "community": "1", "type": "code"}, {"id": "auth_service_verify_otp_code", "label": "OTP Verification", "title": "backend/app/services/auth_service.py", "community": "1", "type": "code"}, {"id": "auth_service_register_user", "label": "User Registration", "title": "backend/app/services/auth_service.py", "community": "1", "type": "code"}, {"id": "auth_service_login_with_password", "label": "Password Login", "title": "backend/app/services/auth_service.py", "community": "1", "type": "code"}, {"id": "auth_service_login_with_otp", "label": "OTP Login", "title": "backend/app/services/auth_service.py", "community": "1", "type": "code"}, {"id": "auth_service_refresh_access_token", "label": "Token Refresh", "title": "backend/app/services/auth_service.py", "community": "1", "type": "code"}, {"id": "oauth_service_exchange_google_code", "label": "Google OAuth Exchange", "title": "backend/app/services/oauth_service.py", "community": "1", "type": "code"}, {"id": "oauth_service_find_or_create_oauth_user", "label": "OAuth User Creation", "title": "backend/app/services/oauth_service.py", "community": "1", "type": "code"}, {"id": "oauth_service_link_oauth_to_phone", "label": "Phone Linking", "title": "backend/app/services/oauth_service.py", "community": "1", "type": "code"}, {"id": "voyza_platform", "label": "Voyza Car Rental Platform", "title": "README.md", "community": "1", "type": "document"}, {"id": "auth_system", "label": "Authentication System", "title": "DEPLOYMENT_SUMMARY.md", "community": "1", "type": "document"}, {"id": "oauth_google", "label": "Google OAuth Provider", "title": "DEPLOYMENT_SUMMARY.md", "community": "1", "type": "document"}, {"id": "phone_otp_auth", "label": "Phone OTP Authentication", "title": "DEPLOYMENT_SUMMARY.md", "community": "1", "type": "document"}, {"id": "jwt_system", "label": "JWT Token Management", "title": "AUTH_TESTING_REPORT.md", "community": "1", "type": "document"}, {"id": "kyc_service", "label": "KYC Service Layer", "title": "PHASE3_IMPLEMENTATION.md", "community": "1", "type": "document"}, {"id": "backend_api", "label": "FastAPI Backend", "title": "README.md", "community": "1", "type": "document"}, {"id": "frontend_nextjs", "label": "Next.js Frontend", "title": "README.md", "community": "1", "type": "document"}, {"id": "postgres_db", "label": "PostgreSQL Database", "title": "README.md", "community": "1", "type": "document"}, {"id": "docker_deployment", "label": "Docker Containerization", "title": "DEPLOYMENT_GUIDE.md", "community": "1", "type": "document"}], "links": [{"source": "auth_service_send_otp", "target": "auth_service_verify_otp_code", "relation": "precedes", "confidence": "EXTRACTED"}, {"source": "auth_service_register_user", "target": "auth_service_login_with_password", "relation": "enables", "confidence": "EXTRACTED"}, {"source": "auth_service_login_with_otp", "target": "auth_service_refresh_access_token", "relation": "manages_tokens", "confidence": "EXTRACTED"}, {"source": "oauth_service_exchange_google_code", "target": "oauth_service_find_or_create_oauth_user", "relation": "creates", "confidence": "EXTRACTED"}, {"source": "oauth_service_find_or_create_oauth_user", "target": "oauth_service_link_oauth_to_phone", "relation": "prepares_for", "confidence": "EXTRACTED"}, {"source": "auth_service_send_otp", "target": "oauth_service_link_oauth_to_phone", "relation": "reused_by", "confidence": "EXTRACTED"}, {"source": "voyza_platform", "target": "backend_api", "relation": "has", "confidence": "EXTRACTED"}, {"source": "auth_system", "target": "oauth_google", "relation": "supports", "confidence": "EXTRACTED"}, {"source": "oauth_google", "target": "jwt_system", "relation": "uses", "confidence": "EXTRACTED"}, {"source": "backend_api", "target": "postgres_db", "relation": "connects", "confidence": "EXTRACTED"}], "communities": {"0": ["backend_app_services_auth_service_py", "backend_app_services_oauth_service_py", "backend_app_api_v1_endpoints_auth_py", "backend_app_models_models_py", "backend_app_core_security_py", "auth_service_send_otp", "auth_service_verify_otp_code", "auth_service_register_user", "auth_service_login_with_password", "auth_service_login_with_otp", "auth_service_refresh_access_token", "oauth_service_exchange_google_code", "oauth_service_find_or_create_oauth_user", "oauth_service_link_oauth_to_phone"], "1": ["voyza_platform", "auth_system", "oauth_google", "phone_otp_auth", "jwt_system", "kyc_service", "backend_api", "frontend_nextjs", "postgres_db", "docker_deployment"]}, "labels": {"0": "Code & Services", "1": "Documentation & Architecture"}, "god_nodes": [{"label": "OTP Generation", "id": "auth_service_send_otp"}, {"label": "OAuth User Creation", "id": "oauth_service_find_or_create_oauth_user"}, {"label": "Phone Linking", "id": "oauth_service_link_oauth_to_phone"}, {"label": "Google OAuth Provider", "id": "oauth_google"}, {"label": "FastAPI Backend", "id": "backend_api"}], "surprises": [{"from": "OAuth", "to": "Phone", "reason": "Phone verification required after OAuth"}, {"from": "JWT", "to": "Refresh", "reason": "Tokens rotated on every refresh"}]};
+        
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        const svg = d3.select('#graph').append('svg')
+            .attr('width', width)
+            .attr('height', height);
+        
+        const simulation = d3.forceSimulation(graphData.nodes)
+            .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(100))
+            .force('charge', d3.forceManyBody().strength(-200))
+            .force('center', d3.forceCenter(width / 2, height / 2));
+        
+        const links = svg.selectAll('line')
+            .data(graphData.links)
+            .enter().append('line');
+        
+        const nodes = svg.selectAll('circle')
+            .data(graphData.nodes)
+            .enter().append('circle')
+            .attr('r', 8)
+            .attr('class', d => d.type)
+            .call(d3.drag()
+                .on('start', dragstarted)
+                .on('drag', dragged)
+                .on('end', dragended));
+        
+        const labels = svg.selectAll('text')
+            .data(graphData.nodes)
+            .enter().append('text')
+            .attr('class', 'node-label')
+            .text(d => d.label.substring(0, 15))
+            .attr('x', 12)
+            .attr('y', 4);
+        
+        simulation.on('tick', () => {
+            links
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+            
+            nodes
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y);
+            
+            labels
+                .attr('x', d => d.x + 12)
+                .attr('y', d => d.y + 4);
+        });
+        
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+        
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+    </script>
+</body>
+</html>
