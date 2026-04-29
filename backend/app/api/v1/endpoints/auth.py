@@ -37,6 +37,7 @@ from app.schemas.auth import (
     OAuthTokenResponse,
 )
 from app.services import auth_service, oauth_service
+from app.services.sms_service import send_otp_sms
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -58,10 +59,15 @@ async def register_send_phone_otp(
         db=db,
     )
 
+    # Dispatch SMS via Twilio
+    sms_sent = await send_otp_sms(phone=body.phone, otp=raw_otp, purpose="registration")
+
     from app.core.config import settings
     response = {"message": "OTP sent successfully to phone"}
     if settings.DEBUG:
         response["otp"] = raw_otp
+        response["sms_sent"] = sms_sent
+    await db.commit()
     return response
 
 
@@ -150,7 +156,7 @@ async def send_otp(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Send a 6-digit OTP to the given phone number.
+    Send a 6-digit OTP to the given phone number via SMS.
     Rate-limited via middleware (60 req/min per IP).
     """
     raw_otp = await auth_service.send_otp(
@@ -159,21 +165,25 @@ async def send_otp(
         db=db,
     )
 
-    # TODO: Dispatch SMS via Twilio / AWS SNS
-    # In dev mode, return OTP in response for testing
-    # For now, if user has email, also send OTP via email as fallback
+    # Dispatch SMS via Twilio (primary)
+    sms_sent = await send_otp_sms(phone=body.phone, otp=raw_otp, purpose="login")
+
+    # Email fallback: if user has email, also send OTP via email
     from app.core.config import settings
     from sqlalchemy import select
     from app.models.models import User
 
     user_result = await db.execute(select(User).where(User.phone == body.phone))
     user = user_result.scalar_one_or_none()
+    email_sent = False
     if user and user.email:
-        await send_otp_email(user.email, raw_otp, purpose="login")
+        email_sent = await send_otp_email(user.email, raw_otp, purpose="login")
 
     response = {"message": "OTP sent successfully"}
     if settings.DEBUG:
-        response["otp"] = raw_otp   # NEVER in production
+        response["otp"] = raw_otp
+        response["sms_sent"] = sms_sent
+        response["email_sent"] = email_sent
     await db.commit()
     return response
 
@@ -449,10 +459,14 @@ async def oauth_send_phone_otp(
         db=db,
     )
 
+    # Dispatch SMS via Twilio
+    sms_sent = await send_otp_sms(phone=body.phone, otp=raw_otp, purpose="oauth_phone_linking")
+
     from app.core.config import settings
     response = {"message": "OTP sent successfully to phone"}
     if settings.DEBUG:
         response["otp"] = raw_otp
+        response["sms_sent"] = sms_sent
     await db.commit()
     return response
 
