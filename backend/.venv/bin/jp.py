@@ -1,4 +1,4 @@
-#!/Users/siddharthapothulapati/drivezy/backend/.venv/bin/python3.12
+#!/Users/siddharthapothulapati/voyza/backend/.venv/bin/python3.12
 
 import sys
 import json
