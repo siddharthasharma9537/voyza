@@ -73,3 +73,6 @@ yarn-error.log*
 
 # Claude Code
 .claude/worktrees/
+
+# Graphify cache
+graphify-out/cache/
