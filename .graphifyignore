@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+env/
+__pycache__/
+.eggs/
+*.egg-info/
+.pytest_cache/
+
+# Build outputs
+dist/
+build/
+.next/
+.out/
+target/
+out/
+
+# Version control
+.git/
+.github/
+.vscode/
+.idea/
+*.swp
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+secrets.json
+
+# Cache
+*.pyc
+*.log
+graphify-out/cache/
+.cache/
+
+# System
+.DS_Store
+Thumbs.db
