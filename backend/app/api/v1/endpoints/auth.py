@@ -14,11 +14,10 @@ Auth endpoints:
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_phone_verified_user
 from app.db.base import get_db
 from app.models.models import User
 from app.services.email_service import send_otp_email
-from app.services.sms_service import send_otp_sms
 from app.schemas.auth import (
     EmailVerificationStartRequest,
     EmailVerificationVerifyRequest,
@@ -38,6 +37,7 @@ from app.schemas.auth import (
     OAuthTokenResponse,
 )
 from app.services import auth_service, oauth_service
+from app.services.sms_service import send_otp_sms
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -50,7 +50,7 @@ async def register_send_phone_otp(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Start phone-based registration: send OTP to phone via SMS.
+    Start phone-based registration: send OTP to phone.
     User must verify OTP before account creation.
     """
     raw_otp = await auth_service.send_otp(
@@ -59,8 +59,8 @@ async def register_send_phone_otp(
         db=db,
     )
 
-    # Send SMS via Twilio
-    sms_sent = await send_otp_sms(body.phone, raw_otp, purpose="registration")
+    # Dispatch SMS via Twilio
+    sms_sent = await send_otp_sms(phone=body.phone, otp=raw_otp, purpose="registration")
 
     from app.core.config import settings
     response = {"message": "OTP sent successfully to phone"}
@@ -156,9 +156,8 @@ async def send_otp(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Send a 6-digit OTP to the given phone number.
+    Send a 6-digit OTP to the given phone number via SMS.
     Rate-limited via middleware (60 req/min per IP).
-    Uses Twilio for SMS, with email fallback if configured.
     """
     raw_otp = await auth_service.send_otp(
         phone=body.phone,
@@ -166,23 +165,25 @@ async def send_otp(
         db=db,
     )
 
-    # Send SMS via Twilio
+    # Dispatch SMS via Twilio (primary)
+    sms_sent = await send_otp_sms(phone=body.phone, otp=raw_otp, purpose="login")
+
+    # Email fallback: if user has email, also send OTP via email
     from app.core.config import settings
     from sqlalchemy import select
     from app.models.models import User
 
-    sms_sent = await send_otp_sms(body.phone, raw_otp, purpose="login")
-
-    # Also send email if user has email on file (fallback)
     user_result = await db.execute(select(User).where(User.phone == body.phone))
     user = user_result.scalar_one_or_none()
+    email_sent = False
     if user and user.email:
-        await send_otp_email(user.email, raw_otp, purpose="login")
+        email_sent = await send_otp_email(user.email, raw_otp, purpose="login")
 
     response = {"message": "OTP sent successfully"}
     if settings.DEBUG:
         response["otp"] = raw_otp
         response["sms_sent"] = sms_sent
+        response["email_sent"] = email_sent
     await db.commit()
     return response
 
@@ -276,6 +277,7 @@ async def logout(
     stored = result.scalar_one_or_none()
     if stored:
         stored.revoked = True
+    await db.commit()
 
 
 @router.get("/me", response_model=UserResponse)
@@ -292,13 +294,22 @@ async def google_oauth_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Google OAuth callback endpoint.
+    Google OAuth callback endpoint (with JWT signature verification).
     Frontend redirects here after user authorizes.
-    Exchanges code for token and creates/links user account.
+
+    Flow:
+    1. Exchange authorization code for ID token (with signature verification)
+    2. Create or link user account with email from Google
+    3. Issue temporary access token (can ONLY be used for phone linking)
+
+    Next steps for client:
+    1. Call POST /auth/oauth/send-phone-otp with phone number
+    2. Call POST /auth/oauth/link-phone with phone and OTP
+    3. User is then fully verified and can access all endpoints
     """
     from app.core.config import settings
 
-    # Exchange code for token
+    # Exchange code for token (with JWT signature verification)
     oauth_data = await oauth_service.exchange_google_code(
         code=code,
         redirect_uri=settings.GOOGLE_REDIRECT_URI,
@@ -315,7 +326,7 @@ async def google_oauth_callback(
     )
     await db.commit()
 
-    # Issue temporary token (user still needs to link phone and set password)
+    # Issue temporary token (for phone linking only)
     temp_tokens = await auth_service._issue_tokens(user, db)
     await db.commit()
 
@@ -323,7 +334,7 @@ async def google_oauth_callback(
         access_token=temp_tokens.access_token,
         token_type="bearer",
         expires_in=temp_tokens.expires_in,
-        message="Phone verification required to complete signup",
+        message="Phone verification required. Call /auth/oauth/send-phone-otp next.",
     )
 
 
@@ -333,10 +344,20 @@ async def apple_oauth_callback(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Apple OAuth callback endpoint.
+    Apple OAuth callback endpoint (with JWT signature verification).
     Frontend redirects here after user authorizes.
+
+    Flow:
+    1. Exchange authorization code for ID token (with signature verification)
+    2. Create or link user account with email from Apple
+    3. Issue temporary access token (can ONLY be used for phone linking)
+
+    Next steps for client:
+    1. Call POST /auth/oauth/send-phone-otp with phone number
+    2. Call POST /auth/oauth/link-phone with phone and OTP
+    3. User is then fully verified and can access all endpoints
     """
-    # Exchange code for token
+    # Exchange code for token (with JWT signature verification)
     oauth_data = await oauth_service.exchange_apple_code(code=code)
 
     # Find or create user
@@ -350,7 +371,7 @@ async def apple_oauth_callback(
     )
     await db.commit()
 
-    # Issue temporary token
+    # Issue temporary token (for phone linking only)
     temp_tokens = await auth_service._issue_tokens(user, db)
     await db.commit()
 
@@ -358,7 +379,7 @@ async def apple_oauth_callback(
         access_token=temp_tokens.access_token,
         token_type="bearer",
         expires_in=temp_tokens.expires_in,
-        message="Phone verification required to complete signup",
+        message="Phone verification required. Call /auth/oauth/send-phone-otp next.",
     )
 
 
@@ -370,10 +391,21 @@ async def facebook_oauth_callback(
     """
     Facebook OAuth callback endpoint.
     Frontend redirects here after user authorizes.
+
+    Flow:
+    1. Exchange authorization code for access token
+    2. Retrieve user profile from Facebook Graph API
+    3. Create or link user account with email from Facebook
+    4. Issue temporary access token (can ONLY be used for phone linking)
+
+    Next steps for client:
+    1. Call POST /auth/oauth/send-phone-otp with phone number
+    2. Call POST /auth/oauth/link-phone with phone and OTP
+    3. User is then fully verified and can access all endpoints
     """
     from app.core.config import settings
 
-    # Exchange code for token
+    # Exchange code for token and retrieve user profile
     oauth_data = await oauth_service.exchange_facebook_code(
         code=code,
         redirect_uri=settings.FACEBOOK_REDIRECT_URI,
@@ -390,7 +422,7 @@ async def facebook_oauth_callback(
     )
     await db.commit()
 
-    # Issue temporary token
+    # Issue temporary token (for phone linking only)
     temp_tokens = await auth_service._issue_tokens(user, db)
     await db.commit()
 
@@ -398,8 +430,45 @@ async def facebook_oauth_callback(
         access_token=temp_tokens.access_token,
         token_type="bearer",
         expires_in=temp_tokens.expires_in,
-        message="Phone verification required to complete signup",
+        message="Phone verification required. Call /auth/oauth/send-phone-otp next.",
     )
+
+
+@router.post("/oauth/send-phone-otp", status_code=status.HTTP_200_OK)
+async def oauth_send_phone_otp(
+    body: PhoneSendOTPRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Send OTP to phone number for OAuth user to verify and link phone.
+    Must be called before oauth/link-phone.
+    Requires authentication (from OAuth callback).
+    """
+    # Check that user doesn't already have a phone
+    if current_user.phone:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User already has a phone number linked",
+        )
+
+    # Send OTP for phone linking
+    raw_otp = await auth_service.send_otp(
+        phone=body.phone,
+        purpose="oauth_phone_linking",
+        db=db,
+    )
+
+    # Dispatch SMS via Twilio
+    sms_sent = await send_otp_sms(phone=body.phone, otp=raw_otp, purpose="oauth_phone_linking")
+
+    from app.core.config import settings
+    response = {"message": "OTP sent successfully to phone"}
+    if settings.DEBUG:
+        response["otp"] = raw_otp
+        response["sms_sent"] = sms_sent
+    await db.commit()
+    return response
 
 
 @router.post("/oauth/link-phone", response_model=UserResponse)
@@ -411,7 +480,15 @@ async def oauth_link_phone(
     """
     Link phone number to OAuth account (after OTP verification).
     Requires authentication (from OAuth callback).
+    Must first call oauth/send-phone-otp to receive OTP.
     """
+    # Check that user doesn't already have a phone
+    if current_user.phone:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User already has a phone number linked",
+        )
+
     # Verify phone OTP
     await auth_service.verify_otp_code(
         phone=body.phone,

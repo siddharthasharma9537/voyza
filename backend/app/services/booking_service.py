@@ -25,9 +25,10 @@ from app.models.models import (
     Availability,
     Booking,
     BookingStatus,
+    User,
+    UserRole,
     Vehicle,
     VehicleStatus,
-    User,
 )
 from app.schemas.bookings import (
     BookingCreateRequest,
@@ -233,7 +234,6 @@ async def cancel_booking(
         raise HTTPException(404, "Booking not found")
 
     # Authorization
-    from app.models.models import UserRole
     is_customer = actor.id == booking.customer_id
     is_owner    = actor.id == booking.owner_id
     is_admin    = actor.role == UserRole.ADMIN

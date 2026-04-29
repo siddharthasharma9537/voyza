@@ -17,15 +17,17 @@ import hashlib
 import hmac
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.dependencies import get_current_user
 from app.db.base import get_db
-from app.models.models import User
+from app.models.models import Booking, Payment, User, UserRole
 from app.schemas.payments import (
     CreateOrderRequest,
     CreateOrderResponse,
+    PaymentStatusResponse,
     RefundRequest,
     RefundResponse,
     VerifyPaymentRequest,
@@ -128,11 +130,6 @@ async def get_payment_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Get all payment records for a booking."""
-    from sqlalchemy import select
-    from app.models.models import Booking, Payment, UserRole
-    from app.schemas.payments import PaymentStatusResponse
-
-    # Authorization
     booking_result = await db.execute(select(Booking).where(Booking.id == booking_id))
     booking = booking_result.scalar_one_or_none()
     if not booking:
