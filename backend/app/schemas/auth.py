@@ -9,6 +9,19 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 import re
 
 
+def validate_password_strength(password: str) -> str:
+    """Validate password meets security requirements."""
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[0-9]", password):
+        raise ValueError("Password must contain at least one number")
+    if not re.search(r"[!@#$%^&*()_+\-=\[\]{};:'\",.<>?/\\|`~]", password):
+        raise ValueError("Password must contain at least one special character (!@#$%^&* etc.)")
+    return password
+
+
 class PhoneSendOTPRequest(BaseModel):
     phone: str = Field(..., examples=["9876543210"])
 
@@ -58,6 +71,13 @@ class RegisterRequest(BaseModel):
     email:     EmailStr | None = None
     password:  str | None      = Field(default=None, min_length=8)
     role:      str             = Field(default="customer", pattern="^(customer|owner)$")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str | None) -> str | None:
+        if v is not None:
+            validate_password_strength(v)
+        return v
 
     @field_validator("phone")
     @classmethod
@@ -212,6 +232,11 @@ class OAuthLinkPhoneRequest(BaseModel):
 class OAuthSetPasswordRequest(BaseModel):
     """Request to set password for OAuth user (backup authentication)."""
     password: str = Field(..., min_length=8, examples=["SecurePass123!"])
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 class OAuthTokenResponse(BaseModel):
