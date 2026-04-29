@@ -444,8 +444,8 @@ async def process_refund(
             "Cancellation within 6 hours of pickup. No refund applicable per policy."
         )
 
-    # Cap at actual payment amount
-    refund_amount = min(refund_amount, payment.amount)
+    # Cap at actual payment amount and ensure non-negative
+    refund_amount = max(0, min(refund_amount, payment.amount))
 
     # ── Initiate Razorpay refund ──────────────────────────────────────
     rz = _razorpay()
