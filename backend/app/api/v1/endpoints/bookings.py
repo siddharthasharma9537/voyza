@@ -10,18 +10,20 @@ GET  /bookings/{id}             — single booking detail
 POST /bookings/{id}/cancel      — cancel booking
 """
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import and_, desc, join, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
 from app.db.base import get_db
-from app.models.models import User
+from app.models.models import Booking, Refund, User, UserRole, Vehicle
 from app.schemas.bookings import (
     BookingCreateRequest,
     BookingResponse,
     CancelBookingRequest,
     PricingBreakdown,
 )
+from app.schemas.payments import PaymentStatusResponse
 from app.services import booking_service
 
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
@@ -82,10 +84,6 @@ async def get_booking(
     db: AsyncSession = Depends(get_db),
 ):
     """Get a single booking with full details. Only the customer, owner, or admin can view."""
-    from sqlalchemy import select
-    from app.models.models import Booking, UserRole
-    from fastapi import HTTPException
-
     result = await db.execute(select(Booking).where(Booking.id == booking_id))
     booking = result.scalar_one_or_none()
 
@@ -127,15 +125,12 @@ async def list_refunds(
     db: AsyncSession = Depends(get_db),
 ):
     """List all refunds for the current customer."""
-    from sqlalchemy import select, join, and_
-    from app.models.models import Refund, Booking, Vehicle
-
     result = await db.execute(
         select(Refund, Booking, Vehicle)
         .join(Booking, Booking.id == Refund.booking_id)
         .join(Vehicle, Vehicle.id == Booking.vehicle_id)
         .where(Booking.customer_id == current_user.id)
-        .order_by(Refund.requested_at.desc())
+        .order_by(desc(Refund.requested_at))
     )
     rows = result.all()
 
